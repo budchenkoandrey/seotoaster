@@ -16,12 +16,15 @@ class Application_Form_Container extends Zend_Form {
 
 	public function init() {
 		$this->setMethod(Zend_Form::METHOD_POST);
-		$this->setAttrib('id', 'frm_content');
+		$this->setAttribs(array('id'=> 'frm_content', 'class' => 'grid_12 content-auto'));
 
-		$this->addElement('submit', 'submit', array(
-			'label'  => 'Save container',
-			'class'  => 'formsubmit',
-			'ignore' => true
+		$this->addElement('button', 'submit', array(
+			'id'     => 'btn-submit',
+            'label' => 'Save content',
+            'type'  => 'submit',
+			'class'  => 'formsubmit btn ticon-save',
+			'ignore' => true,
+            'escape'=> false
 		));
 
 		$this->addElement('hidden', 'containerType', array(
@@ -45,6 +48,8 @@ class Application_Form_Container extends Zend_Form {
 		));
 
 		$this->setElementDecorators(array('ViewHelper', 'Errors'));
+		$this->removeDecorator('DtDdWrapper');
+		$this->removeDecorator('DlWrapper');
     }
 
 	public function getContent() {

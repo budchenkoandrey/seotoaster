@@ -6,6 +6,20 @@ abstract class Application_Model_Mappers_Abstract {
 
 	protected $_model          = '';
 
+	protected static $_instances = null;
+
+	private function __construct() {}
+
+	private function __clone() {}
+
+	public static function getInstance() {
+		$class = get_called_class();
+		if(!isset(self::$_instances[$class])) {
+			self::$_instances[$class] = new $class();
+		}
+		return self::$_instances[$class];
+	}
+
 	public function setDbTable($dbTable) {
 		if(is_string($dbTable)) {
 			$dbTable = new $dbTable();
@@ -28,10 +42,6 @@ abstract class Application_Model_Mappers_Abstract {
 	}
 
 	abstract public function save($model);
-
-    //abstract public function find($id);
-
-	//abstract public function fetchAll();
 
 	public function find($id) {
 		$result = $this->getDbTable()->find($id);
@@ -61,6 +71,5 @@ abstract class Application_Model_Mappers_Abstract {
 		}
 		return $entries;
 	}
-
 }
 

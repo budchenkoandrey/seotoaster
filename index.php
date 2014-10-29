@@ -1,4 +1,11 @@
 <?php
+/*************************************************************************
+ * Necessary alter for pcre.backtrack_limit
+ *
+ ************************************************************************/
+ini_set('pcre.backtrack_limit', '10000000000000');
+
+ini_set('session.cookie_httponly', 1);
 
 /*************************************************************************
  * Installation check
@@ -6,7 +13,7 @@
  ************************************************************************/
 
 if(is_dir(realpath(dirname(__FILE__).'/install/'))){
-	header('Location: /install/');
+	header('Location: install/');
 	exit();
 }
 
@@ -43,13 +50,16 @@ set_include_path(implode(PATH_SEPARATOR, array(
     get_include_path(),
 )));
 
+// header to prevent security issues in iframes (to avoid clickjacking attacks)
+header('X-Frame-Options: SAMEORIGIN');
+
 /** Zend_Application */
 require_once 'Zend/Application.php';
 
 // Create application, bootstrap, and run
 $application = new Zend_Application(
     APPLICATION_ENV,
-    APPLICATION_PATH . '/configs/' . SITE_NAME . 'application.ini'
+    APPLICATION_PATH . '/configs/' . SITE_NAME . '.ini'
 );
 $application->bootstrap()
             ->run();

@@ -1,15 +1,16 @@
 <?php if(!empty($this->pages)): ?>
-	<ul id="main_menu">
-		<?php foreach ($this->pages as $key => $page): ?>
-			<li class="category"><a title="<?php echo $page['category']->getH1(); ?>" href="<?php echo $this->websiteUrl . $page['category']->getUrl(); ?>"><?php echo $page['category']->getNavName(); ?></a>
-				<?php if(isset($page['subPages'])): ?>
-					<ul id="<?php echo $page['category']->getUrl(); ?>">
-						<?php foreach ($page['subPages'] as $subPage): ?>
-							<li class="page"><a title="<?php echo $subPage->getH1(); ?>" href="<?php echo $this->websiteUrl . $subPage->getUrl(); ?>"><?php echo $subPage->getNavName(); ?></a></li>
-						<?php endforeach; ?>
-					</ul>
-				<?php endif; ?>
-			</li>
-		<?php endforeach; ?>
-	</ul>
+<ul class="main_menu">
+    <?php $i = 1; ?>
+    <?php foreach ($this->pages as $key => $page): ?>
+        <li class="category cat-<?php echo $i++; ?>"><a title="<?php echo $page['h1']; ?>" href="<?php echo $this->websiteUrl . str_replace('index.html', '', $page['url']); ?>"><?php echo $page['navName'] ; ?></a>
+            <?php if(isset($page['subPages']) && !empty($page['subPages']) ): ?>
+                <ul class="<?php echo str_replace('.html', '', $page['url']); ?>">
+                    <?php foreach ($page['subPages'] as $subPage): ?>
+                        <li class="page"><a title="<?php echo $subPage['h1']; ?>" href="<?php echo $this->websiteUrl . str_replace('index.html', '', $subPage['url']); ?>"><?php echo $subPage['navName'] ; ?></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </li>
+    <?php endforeach; ?>
+</ul>
 <?php endif; ?>

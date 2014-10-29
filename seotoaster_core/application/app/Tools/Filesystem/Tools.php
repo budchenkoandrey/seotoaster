@@ -7,7 +7,7 @@
  */
 class Tools_Filesystem_Tools {
 
-	private static $_excludedFiles = array('.svn', '.', '..', '.htaccess', 'en.lng', 'fr.lng');
+	private static $_excludedFiles = array('.svn', '.', '..', '.htaccess', 'concat.css', '.gitignore');
 
 	/**
 	 * Scan directory and get all files from it.
@@ -18,7 +18,7 @@ class Tools_Filesystem_Tools {
 	 */
 	public static function scanDirectory($path, $incFilePath = false, $recursively = true) {
 		$foundFiles = array();
-		$path       = (string)trim($path);
+		$path       = (string)trim($path = (substr($path, strlen($path)-1) == DIRECTORY_SEPARATOR) ? $path : $path . DIRECTORY_SEPARATOR);
 		if(!$path) {
 			throw new Exceptions_SeotoasterException('Scaning directory: path to the directrory is empty.');
 		}
@@ -34,16 +34,14 @@ class Tools_Filesystem_Tools {
 					continue;
 				}
 				if($recursively) {
-					if(is_dir($path . '/' . $file)) {
+					if(is_dir($path . $file)) {
 						unset($foundFiles[array_search($file, $foundFiles)]);
-						//$foundFiles = array_merge($foundFiles, self::scanDirectory($path . '/' . $file, $incFilePath));
-						$files = array_merge($files, self::scanDirectory($path . '/' . $file, $incFilePath));
+						$files = array_merge($files, self::scanDirectory($path . $file, $incFilePath));
 						continue;
 					}
 				}
 				if($incFilePath) {
-					//$foundFiles[$key] = $path . '/' . $file;
-					array_push($files, $path . '/' . $file);
+					array_push($files, $path . $file);
 				} else {
 					array_push($files, $file);
 				}
@@ -75,20 +73,22 @@ class Tools_Filesystem_Tools {
 	/**
 	 * Scan given directory for files with given extension
 	 *
+	 * @todo recode this method to use "glob" php function
+	 *
 	 * @param string $directory Directory to scan
 	 * @param string $extension Files extension
 	 * @return array
 	 */
 	public static function findFilesByExtension($directory, $extension, $incFilePath = false, $pairs = false, $recursively = true) {
 		$foundFiles = array();
-		$files      = array();
 		$files      = self::scanDirectory($directory, $incFilePath, $recursively);
 		if(!empty($files)) {
 			if(is_array($extension)) {
 				$extension = implode('|', $extension);
 			}
 			foreach ($files as $file) {
-				if(preg_match('~^[a-zA-Z0-9-_\s/.]+\.' . $extension . '$~U', $file)) {
+				$fileMatch = (extension_loaded('mbstring')) ? mb_eregi('^.+\.(' . $extension . ')$', $file) : preg_match('~^.+\.' . $extension . '$~uiU', $file);
+				if($fileMatch) {
 					if($pairs) {
 						$explodedFilePath = explode(DIRECTORY_SEPARATOR, $file);
 						$foundFiles[preg_replace('~\.[a-zA-Z]{3,4}~iu', '', end($explodedFilePath))] = $file;
@@ -110,7 +110,7 @@ class Tools_Filesystem_Tools {
 
 	public static function getFile($filename){
 		if (!file_exists($filename)) {
-			throw new Exceptions_SeotoasterException('File doesn\'t exists');
+			throw new Exceptions_SeotoasterException('File '. $filename . ' doesn\'t exists ');
 		}
 		return file_get_contents($filename);
 	}
@@ -160,19 +160,82 @@ class Tools_Filesystem_Tools {
 			return false;
 		}
 	}
-	
+
+    public static function copy($source, $dest, $exclude = array(), $move = false) {
+        $source = rtrim($source, DIRECTORY_SEPARATOR);
+        $dest   = rtrim($dest, DIRECTORY_SEPARATOR);
+        if(!file_exists($source)) {
+            throw new Exceptions_SeotoasterException('Source file ' . $source . ' doesn\'t exists.');
+        }
+        if(is_dir($source)) {
+            if(!file_exists($dest)) {
+                mkdir($dest);
+            }
+            $files = self::scanDirectory($source, false, false);
+            if(is_array($files) && !empty($files)) {
+                foreach($files as $file) {
+                    if(in_array($file, $exclude)) {
+                        continue;
+                    }
+                    self::copy($source . DIRECTORY_SEPARATOR . $file, $dest . DIRECTORY_SEPARATOR . $file, $exclude, $move);
+                }
+            }
+
+        } else {
+	        return $move ? rename($source, $dest) : copy($source, $dest);
+        }
+        return true;
+    }
+
 	public static function basename($filepath) {
 		$filepath = (string) trim($filepath);
 		if (!$filepath){
 			return false;
 		}
-		
-		preg_match('~[^'.DIRECTORY_SEPARATOR.']+$~i', $filepath, $match);
-		
-		if ($match) {
-			return $match[0];
+
+		$parts = explode(DIRECTORY_SEPARATOR, $filepath);
+
+		if ($parts) {
+			return end($parts);
 		}
-		
+
 		return false;
 	}
+
+    /**
+     * Check if directory is not empty
+     * @param $dirname Directory to check
+     * @return bool true if directory empty
+     * @throws Exceptions_SeotoasterException
+     */
+    public static function isEmptyDir($dirname){
+        $dirname = trim($dirname);
+        if ($dirname == '' || !is_dir($dirname)) {
+            throw new Exceptions_SeotoasterException('Wrong directory given: ' . $dirname);
+        }
+        $handle = opendir($dirname);
+        if ($handle) {
+            while (false !== ($entry = readdir($handle))) {
+                if (!in_array($entry, array('.', '..'))) {
+                    closedir($handle);
+                    return false;
+                }
+            }
+        } else {
+            throw new Exceptions_SeotoasterException('Can not open directory: ' . $dirname);
+        }
+        return true;
+    }
+
+    /**
+     * Returns the correct file path for windows
+     *
+     * @param string $path file path
+     *
+     * @return string clean path for Win file
+     */
+    public static function cleanWinPath($path){
+
+        return str_replace('\\', '/', trim($path));
+    }
 }

@@ -12,53 +12,88 @@ class Application_Model_Models_Page extends Application_Model_Models_Abstract im
 
 	const IDCATEGORY_DRAFT     = -2;
 
-	const IDCATEGORY_PRODUCT   = -3;
-
 	const IDCATEGORY_CATEGORY  = 0;
 
 	const PROTECTED_SIGN       = '*';
 
-	const OPT_PROTECTED        = 'protected';
+	const OPT_PROTECTED        = 'option_protected';
 
-	const OPT_404PAGE          = 'is_404page';
+	const OPT_404PAGE          = 'option_404page';
 
-	protected $_templateId       = '';
+	const OPT_ERRLAND          = 'option_member_loginerror';
 
-	protected $_parentId         = 0;
+	const OPT_MEMLAND          = 'option_member_landing';
 
-	protected $_showInMenu       = self::IN_NOMENU;
+	const OPT_SIGNUPLAND       = 'option_member_signuplanding';
 
-	protected $_navName          = '';
+	//const CONTEXT_NEWS         = 'news';
 
-	protected $_metaDescription  = '';
+    const IS_NEWS_PAGE         = '1';
 
-    protected $_metaKeywords     = '';
+    const OPTION_USAGE_ONCE    = 'once';
 
-    protected $_headerTitle      = '';
+    const OPTION_USAGE_MANY    = 'many';
 
-    protected $_url              = '';
+	protected $_templateId        = '';
 
-    protected $_h1               = '';
+	protected $_parentId          = 0;
 
-    protected $_teaserText       = '';
+	protected $_showInMenu        = self::IN_NOMENU;
 
-	protected $_lastUpdate       = '';
+	protected $_navName           = '';
 
-	protected $_is404page        = false;
+	protected $_metaDescription   = '';
 
-	protected $_protected        = false;
+    protected $_metaKeywords      = '';
 
-	protected $_memLandig        = false;
+    protected $_headerTitle       = '';
 
-	protected $_order            = 0;
+    protected $_url               = '';
 
-	protected $_targetedKey      = '';
+    protected $_h1                = '';
 
-	protected $_siloId           = 0;
+    protected $_teaserText        = '';
 
-	protected $_content          = '';
+	protected $_lastUpdate        = '';
 
-	protected $_system           = false;
+	protected $_order             = 0;
+
+	protected $_targetedKeyPhrase = '';
+
+	protected $_siloId            = 0;
+
+	protected $_content           = '';
+
+	protected $_system            = false;
+
+	protected $_draft             = false;
+
+	protected $_news              = false;
+
+	protected $_publishAt         = '';
+
+	protected $_optimized         = false;
+
+    protected $_extraOptions      = array();
+
+	protected $_previewImage      = null;
+
+    protected $_containers        = array();
+
+    /**
+     * @param array $containers
+     */
+    public function setContainers($containers) {
+        $this->_containers = $containers;
+    }
+
+    /**
+     * @return array
+     */
+    public function getContainers() {
+        return $this->_containers;
+    }
+
 
 	public function getContent() {
 		return $this->_content;
@@ -68,7 +103,6 @@ class Application_Model_Models_Page extends Application_Model_Models_Abstract im
 		$this->_content = $content;
 		return $this;
 	}
-
 
 	public function getTemplateId() {
 		return $this->_templateId;
@@ -170,30 +204,49 @@ class Application_Model_Models_Page extends Application_Model_Models_Abstract im
 	}
 
 	public function getIs404page() {
-		return $this->_is404page;
+		return $this->_getExtraOption(self::OPT_404PAGE);
 	}
 
 	public function setIs404page($is404page) {
-		$this->_is404page = $is404page;
-		$this->_system    = $this->_is404page;
+        $is404page = (boolean) $is404page;
+		($is404page) ? $this->_setExtraOption(self::OPT_404PAGE) : $this->_unsetExtraOption(self::OPT_404PAGE);
+		$this->_system = $is404page;
 		return $this;
 	}
 
 	public function getProtected() {
-		return $this->_protected;
+        return $this->_getExtraOption(self::OPT_PROTECTED);
 	}
 
 	public function setProtected($protected) {
-		$this->_protected = $protected;
+		($protected) ? $this->_setExtraOption(self::OPT_PROTECTED) : $this->_unsetExtraOption(self::OPT_PROTECTED);
 		return $this;
 	}
 
-	public function getMemLandig() {
-		return $this->_memLandig;
+	public function getMemLanding() {
+		return $this->_getExtraOption(self::OPT_MEMLAND);
 	}
 
-	public function setMemLandig($memLandig) {
-		$this->_memLandig = $memLandig;
+	public function setMemLanding($memLanding) {
+		($memLanding) ? $this->_setExtraOption(self::OPT_MEMLAND) : $this->_unsetExtraOption(self::OPT_MEMLAND);
+		return $this;
+	}
+
+	public function getErrLoginLanding() {
+		return $this->_getExtraOption(self::OPT_ERRLAND);
+	}
+
+	public function setErrLoginLanding($errLoginLanding) {
+		($errLoginLanding) ? $this->_setExtraOption(self::OPT_ERRLAND) : $this->_unsetExtraOption(self::OPT_ERRLAND);
+		return $this;
+	}
+
+	public function getSignupLanding() {
+		return $this->_getExtraOption(self::OPT_SIGNUPLAND);
+	}
+
+	public function setSignupLanding($signupLanding) {
+        ($signupLanding) ? $this->_setExtraOption(self::OPT_SIGNUPLAND) : $this->_unsetExtraOption(self::OPT_SIGNUPLAND);
 		return $this;
 	}
 
@@ -203,15 +256,6 @@ class Application_Model_Models_Page extends Application_Model_Models_Abstract im
 
 	public function setOrder($order) {
 		$this->_order = $order;
-		return $this;
-	}
-
-	public function getTargetedKey() {
-		return $this->_targetedKey;
-	}
-
-	public function setTargetedKey($targetedKey) {
-		$this->_targetedKey = $targetedKey;
 		return $this;
 	}
 
@@ -234,7 +278,7 @@ class Application_Model_Models_Page extends Application_Model_Models_Abstract im
 	}
 
 	public function getResourceId() {
-		return ($this->_protected) ? Tools_Security_Acl::RESOURCE_PAGE_PROTECTED : Tools_Security_Acl::RESOURCE_PAGE_PUBLIC;
+		return (in_array(self::OPT_PROTECTED, $this->_extraOptions)) ? Tools_Security_Acl::RESOURCE_PAGE_PROTECTED : Tools_Security_Acl::RESOURCE_PAGE_PUBLIC;
 	}
 
 	public function getSystem() {
@@ -246,7 +290,108 @@ class Application_Model_Models_Page extends Application_Model_Models_Abstract im
 		return $this;
 	}
 
+	public function getDraft() {
+		return $this->_draft;
+	}
 
+	public function setDraft($draft) {
+		$this->_draft  = $draft;
+		$this->_system = $draft;
+		return $this;
+	}
+
+	public function getPublishAt() {
+		return $this->_publishAt;
+	}
+
+	public function setPublishAt($publishAt) {
+		$this->_publishAt = $publishAt;
+		return $this;
+	}
+
+	public function getNews() {
+		return $this->_news;
+	}
+
+	public function setNews($news) {
+		$this->_news = $news;
+		if($news) {
+			$this->_system = $news;
+		}
+		return $this;
+	}
+
+	public function setOptimized($optimized) {
+		$this->_optimized = (boolean)$optimized;
+		return $this;
+	}
+
+	public function getOptimized() {
+		return $this->_optimized;
+	}
+
+    /**
+     * Set an extra options for the page
+     *
+     * Pass array as extra options and false for the $force param and new options will be merged with the current ones
+     * Pass array as extra options and true for the $force param and current extra options will be replaced with the new ones
+     * Pass false as extra options and extra options for the current page will be removed
+     *
+     * @param array|string|boolean $extraOptions
+     * @param bool $force Replace or not current extra options
+     * @return Application_Model_Models_Page
+     */
+    public function setExtraOptions($extraOptions, $force = false) {
+        if(is_array($extraOptions)) {
+            $this->_extraOptions = (!$force) ? array_merge($extraOptions, $this->_extraOptions) : $extraOptions;
+        } else if ((boolean)$extraOptions === false) {
+            $this->_extraOptions = array();
+        } else {
+            if(!in_array($extraOptions, $this->_extraOptions)) {
+                array_push($this->_extraOptions, $extraOptions);
+            }
+        }
+        return $this;
+    }
+
+    public function getExtraOptions() {
+        return $this->_extraOptions;
+    }
+
+    public function getExtraOption($option) {
+        return $this->_getExtraOption($option);
+    }
+
+    protected function _getExtraOption($option) {
+        return in_array($option, $this->_extraOptions);
+    }
+
+    protected function _setExtraOption($option) {
+        if(!in_array($option, $this->_extraOptions)) {
+            array_push($this->_extraOptions, $option);
+        }
+    }
+
+    protected function _unsetExtraOption($option) {
+        unset($this->_extraOptions[array_search($option, $this->_extraOptions)]);
+    }
+
+    public function setTargetedKeyPhrase($targetedKeyPhrase) {
+        $this->_targetedKeyPhrase = $targetedKeyPhrase;
+        return $this;
+    }
+
+    public function getTargetedKeyPhrase() {
+        return $this->_targetedKeyPhrase;
+    }
+
+	public function setPreviewImage($previewImage) {
+		$this->_previewImage = $previewImage;
+		return $this;
+	}
+
+	public function getPreviewImage() {
+		return $this->_previewImage;
+	}
 
 }
-

@@ -1,9 +1,10 @@
 <?php
-
 /**
  * Container mapper
  *
  * @author Seotoaster Dev Team
+ * @method static Application_Model_Mappers_ContainerMapper getInstance() getInstance() Returns an instance of itself
+ * @method Application_Model_DbTable_Container getDbTable() Returns an instance of corresponding DbTable
  */
 class Application_Model_Mappers_ContainerMapper extends Application_Model_Mappers_Abstract {
 
@@ -34,7 +35,10 @@ class Application_Model_Mappers_ContainerMapper extends Application_Model_Mapper
 	public function findByName($name, $pageId = 0, $type = Application_Model_Models_Container::TYPE_REGULARCONTENT) {
 		$where = $this->getDbTable()->getAdapter()->quoteInto('name = ?', $name);
 		$where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('container_type = ?', $type);
-		if($pageId) {
+        if ($pageId
+            && $type != Application_Model_Models_Container::TYPE_STATICCONTENT
+            && $type != Application_Model_Models_Container::TYPE_STATICHEADER
+        ) {
 			$where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('page_id = ?', $pageId);
 		}
 		$row  = $this->getDbTable()->fetchAll($where)->current();
@@ -46,6 +50,20 @@ class Application_Model_Mappers_ContainerMapper extends Application_Model_Mapper
 
 	public function findByPageId($pageId) {
 		$where = $this->getDbTable()->getAdapter()->quoteInto("page_id = ?", $pageId);
+		return $this->fetchAll($where);
+	}
+
+	public function findContentContainersByPageId($pageId) {
+		$where  = $this->getDbTable()->getAdapter()->quoteInto("page_id = ?", $pageId);
+		$where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('container_type != ?', Application_Model_Models_Container::TYPE_REGULARHEADER);
+		$where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('container_type != ?', Application_Model_Models_Container::TYPE_STATICHEADER);
+		$where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('container_type != ?', Application_Model_Models_Container::TYPE_CODE);
+		return $this->fetchAll($where);
+	}
+    
+    public function findPreposByPageId($pageId) {
+		$where  = $this->getDbTable()->getAdapter()->quoteInto("page_id = ?", $pageId);
+		$where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('container_type = ?', Application_Model_Models_Container::TYPE_PREPOP);
 		return $this->fetchAll($where);
 	}
 
@@ -73,5 +91,80 @@ class Application_Model_Mappers_ContainerMapper extends Application_Model_Mapper
 		}
 		return $row;
 	}
- }
+    
+    public function findByContainerName($name, $unique = false){
+        $where = $this->getDbTable()->getAdapter()->quoteInto('name = ?', $name);
+        $where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('container_type = ?', Application_Model_Models_Container::TYPE_PREPOP);
+        if($unique){
+            $select = $this->getDbTable()->getAdapter()
+                ->select()
+                ->from(array('container'))
+                ->where($where)
+                ->where('content IS NOT NULL')
+                ->where('content != ""')
+                ->order('content ASC')
+                ->group(array('content'));
+            return $this->getDbTable()->getAdapter()->fetchAll($select);
+        } else {
+            return $this->fetchAll($where);
+        }
+    }
+    
+    public function findByContainerNames($prepopNames = array()){
+        if(!empty($prepopNames)){
+            $select = $this->getDbTable()->getAdapter()
+                    ->select()
+                    ->from(array('container'))
+                    ->where('name IN (?)', $prepopNames)
+                    ->where('container_type = ?', Application_Model_Models_Container::TYPE_PREPOP)
+                    ->where('content IS NOT NULL')
+                    ->where('content != ""')
+                    ->order('content ASC');
+            return $this->getDbTable()->getAdapter()->fetchAll($select);
+        }
+    }
+    
+    public function findByContainerNameWithContent($containerContentArray){
+        $pageId = array();
+        $pageIdArray = array();
+        $summaryArray = array();
+        $start = 0;
+        foreach($containerContentArray as $container=>$content){
+            if($content != 'select'){
+                $where = $this->getDbTable()->getAdapter()->quoteInto('name = ?', $container);
+                $where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto("content = ?", $content);
+                $where .= ' AND ' . $this->getDbTable()->getAdapter()->quoteInto('container_type = ?', Application_Model_Models_Container::TYPE_PREPOP);
+                $result = $this->fetchAll($where);
+                if(!empty($result)){
+                   $summaryArray = array();
+                   foreach($result as $page){
+                       if($start == 0){
+                           $pageId[$page->getPageId()] = $page->getPageId();
+                       }
+                       if(in_array($page->getPageId() ,$pageId) && $start != 0){
+                           $pageIdArray[$page->getPageId()] = $page->getPageId();
+                           $summaryArray[$page->getPageId()] = $page->getPageId();
+                       }
+                    }
+                    if($start != 0 && empty($summaryArray)){
+                        return array();
+                    }
+                    if($start != 0 && !empty($summaryArray)){
+                        $pageId = $summaryArray;
+                    }
+                    $start++;
 
+                }else{
+                    return array();
+                }
+
+            }
+            
+        }
+        if($start == 1){
+           return $pageId;
+        }
+        return $summaryArray;
+    }
+        
+}

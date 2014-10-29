@@ -2,58 +2,81 @@
 
 class Widgets_Content_Content extends Widgets_AbstractContent {
 
-	private $_acl     = null;
+    const POPUP_WIDTH  = 960;
 
-	private $_type    = null;
+    const POPUP_HEIGHT = 560;
 
-	private $_pageId  = null;
+    protected function  _init() {
+        $this->_type = (isset($this->_options[1]) && $this->_options[1] == 'static') ? Application_Model_Models_Container::TYPE_STATICCONTENT : Application_Model_Models_Container::TYPE_REGULARCONTENT;
+        parent::_init();
+    }
 
-	private $_name    = null;
+    protected function _load() {
+        $this->_container = $this->_find();
+        $isPublished      = $this->_checkPublished();
+        if(end($this->_options) == 'ajax') {
+            $this->_view             = new Zend_View(array('scriptPath' => dirname(__FILE__) . '/views'));
+            $this->_view->websiteUrl = Zend_Controller_Action_HelperBroker::getStaticHelper('website')->getUrl();
+            $this->_view->type       = $this->_type;
+            $this->_view->name       = $this->_name;
+            if($this->_pageId == null) {
+                $page = Application_Model_Mappers_PageMapper::getInstance()->findByUrl($this->_toasterOptions['url']);
+                $this->_pageId = $page->getId();
+            }
+            $this->_view->pageId      = $this->_pageId;
+            $this->_view->isPublished = $isPublished;
+            $this->_view->controls    = Tools_Security_Acl::isAllowed($this) ? $this->_generateAdminControl(self::POPUP_WIDTH, self::POPUP_HEIGHT): '';
+            $params                   = Zend_Json::encode(Zend_Controller_Front::getInstance()->getRequest()->getParams());
+            $this->_view->params      = $params;
+            $this->_cacheId           = $this->_name .'_'. $this->_type .'_pid_'. $this->_pageId .'_'. Zend_Controller_Action_HelperBroker::getStaticHelper('Session')->getCurrentUser()->getRoleId() . substr(md5($params), 0, 27);
 
-	private $_content = null;
+            return (!$isPublished && !Tools_Security_Acl::isAllowed($this)) ? '' : $this->_view->render('ajax.phtml');
+        }
 
-	protected function  _init() {
-		parent::_init();
-		$this->_name    = $this->_options[0];
-		$this->_type    = (isset($this->_options[1]) && $this->_options[1] == 'static') ? Application_Model_Models_Container::TYPE_STATICCONTENT : Application_Model_Models_Container::TYPE_REGULARCONTENT;
-		$this->_pageId  = ($this->_type == Application_Model_Models_Container::TYPE_STATICCONTENT) ? 0 : $this->_toasterOptions['id'];
-		$this->_cacheId = $this->_name . $this->_pageId . $this->_type;
-	}
+        $content = ($this->_container === null) ? '' : $this->_container->getContent();
+        if (Tools_Security_Acl::isAllowed($this)) {
+            $content .= $this->_generateAdminControl(self::POPUP_WIDTH, self::POPUP_HEIGHT);
+            if ((bool)Zend_Controller_Action_HelperBroker::getStaticHelper('config')->getConfig('inlineEditor') && !in_array('readonly',$this->_options)){
+                $content = '<div class="container-wrapper '. ($isPublished ? '' : 'unpublished') .'">' . $content . '</div>';
+            }
+            elseif(!$isPublished && !in_array('readonly',$this->_options)) {
+                $content = '<div class="unpublished">' . $content . '</div>';
+            }
+        }
+        else {
+            $content = (!$isPublished) ? '' : $content;
+        }
 
-	protected function  _load() {
-		$currentUser     = Zend_Controller_Action_HelperBroker::getStaticHelper('Session')->getCurrentUser();
-		$mapper          = new Application_Model_Mappers_ContainerMapper();
-		$this->_content = $mapper->findByName($this->_name, $this->_pageId, $this->_type);
-		$contentContent  = (null === $this->_content) ? '' : $this->_content->getContent();
-		if(Tools_Security_Acl::isAllowed($this, $currentUser)) {
-			$contentContent = ($this->_checkPublished()) ? $contentContent : '<div style="border: 1px solid red">' . $contentContent . '</div>';
-			$contentContent .= $this->_addAdminLink($this->_type, ($this->_content === null) ? null : $this->_content->getId(), 'Click to edit content', 940, 590);
-		}
-		else {
-			$contentContent = ($this->_checkPublished()) ? $contentContent : '';
-		}
-		return $contentContent;
-	}
+        return $content;
+    }
 
-	private function _checkPublished() {
-		if($this->_content !== null) {
-			if(!$this->_content->getPublished()) {
-				if($this->_content->getPublishingDate()) {
-					$zDate = new Zend_Date();
-					$result = $zDate->compare(strtotime($this->_content->getPublishingDate()));
-					if($result == 0 || $result == 1) {
-						$this->_content->setPublishingDate('');
-						$this->_content->setPublished(true);
-						$mapper = new Application_Model_Mappers_ContainerMapper();
-						$mapper->save($this->_content);
-					}
-				}
-			}
-			return $this->_content->getPublished();
-		}
-		return true;
-	}
+    /**
+     * Checks if content published
+     *
+     * @return bool true if published
+     */
+    private function _checkPublished() {
+        if($this->_container === null) {
+            return true;
+        }
 
+        if(!$this->_container->getPublished()) {
+            if($this->_container->getPublishingDate()) {
+
+                $zDate  = new Zend_Date();
+                $result = $zDate->compare(strtotime($this->_container->getPublishingDate()));
+
+                if($result == 0 || $result == 1) {
+                    $this->_container->setPublishingDate('')
+                        ->setPublished(true);
+                    Application_Model_Mappers_ContainerMapper::getInstance()->save($this->_container);
+                }
+            }
+        }
+
+        return (bool) $this->_container->getPublished();
+    }
+    
 	/**
 	 * Overrides abstract class method
 	 * For Header and Content widgets we have a different resource id

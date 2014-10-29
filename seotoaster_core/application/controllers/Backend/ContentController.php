@@ -6,6 +6,8 @@
  */
 class Backend_ContentController extends Zend_Controller_Action {
 
+    public static $_allowedActions = array('ajaxcontent');
+
 	const IMG_CONTENTTYPE_SMALL    = 'small';
 
 	const IMG_CONTENTTYPE_MEDIUM   = 'medium';
@@ -23,8 +25,8 @@ class Backend_ContentController extends Zend_Controller_Action {
 	public function init() {
 		parent::init();
 		$this->_websiteData = Zend_Registry::get('website');
-		if(!Tools_Security_Acl::isAllowed(Tools_Security_Acl::RESOURCE_CONTENT)) {
-			$this->_redirect($this->_helper->website->getUrl(), array('exit' => true));
+		if(!Tools_Security_Acl::isAllowed(Tools_Security_Acl::RESOURCE_CONTENT) && !Tools_Security_Acl::isActionAllowed(Tools_Security_Acl::RESOURCE_CONTENT)) {
+			$this->redirect($this->_helper->website->getUrl(), array('exit' => true));
 		}
 
 		$this->_helper->viewRenderer->setNoRender(true);
@@ -32,26 +34,49 @@ class Backend_ContentController extends Zend_Controller_Action {
 		$this->_containerType     = $this->getRequest()->getParam('containerType');
 		$this->_contentForm       = $this->_initCorrectForm();
 		$this->view->websiteUrl   = $this->_helper->website->getUrl();
-		$this->view->currentTheme = $this->_helper->config->getConfig('current_theme');
+		$this->view->currentTheme = $this->_helper->config->getConfig('currentTheme');
+
+        // content help section
+        $this->view->helpSection  = 'content';
 
 		$this->_helper->AjaxContext()->addActionContext('loadfiles', 'json')->initContext('json');
+		$this->_helper->AjaxContext()->addActionContext('refreshfolders', 'json')->initContext('json');
+        $this->_helper->AjaxContext()->addActionContext('cleancache', 'json')->initContext('json');
 	}
 
 	public function addAction() {
 		if($this->getRequest()->isPost()) {
 			$this->_processContent();
 		}
+		if ($this->getRequest()->isXmlHttpRequest()){
+			$container = new Application_Model_Models_Container(array('containerType' => $this->_containerType));
+			$this->_helper->json->direct($container->toArray());
+		}
 		$this->view->published      = true;
 		$this->view->publishingDate = '';
+		if($this->_containerType == Application_Model_Models_Container::TYPE_REGULARCONTENT || $this->_containerType == Application_Model_Models_Container::TYPE_STATICCONTENT) {
+			$this->view->pluginsTabs = $this->_loadPluginsTabs();
+		}
 		echo $this->_renderCorrectView();
 	}
 
 	public function editAction() {
 		if(!$this->getRequest()->isPost()) {
-			$mapper = new Application_Model_Mappers_ContainerMapper();
-			$container = $mapper->find($this->getRequest()->getParam('id'));
+            $container = Application_Model_Mappers_ContainerMapper::getInstance();
+            if ($this->getRequest()->getParam('id')) {
+                $container = $container->find(
+                    $this->getRequest()->getParam('id')
+                );
+            } else {
+                $container = $container->findByName(
+                    $this->getRequest()->getParam('name'), $this->getRequest()->getParam('pageId'), $this->getRequest()->getParam('containerType')
+                );
+            }
 			if(null === $container) {
 				throw new Exceptions_SeotoasterException('Container loading failed.');
+			}
+			if ($this->getRequest()->isXmlHttpRequest()){
+				$this->_helper->json->direct($container->toArray());
 			}
 			$this->_contentForm->getElement('content')->setValue($container->getContent());
 			$this->_contentForm->getElement('containerName')->setValue($container->getName());
@@ -62,6 +87,10 @@ class Backend_ContentController extends Zend_Controller_Action {
 
 			$this->view->published      = $container->getPublished();
 			$this->view->publishingDate = $container->getPublishingDate();
+
+			if($container->getContainerType() == Application_Model_Models_Container::TYPE_REGULARCONTENT || $container->getContainerType() == Application_Model_Models_Container::TYPE_STATICCONTENT) {
+				$this->view->pluginsTabs = $this->_loadPluginsTabs();
+			}
 		}
 		else {
 			$this->_processContent();
@@ -69,19 +98,35 @@ class Backend_ContentController extends Zend_Controller_Action {
 		echo $this->_renderCorrectView();
 	}
 
+    public function ajaxcontentAction() {
+        $currentPage =  Application_Model_Mappers_PageMapper::getInstance()->find($this->getRequest()->getParam('pageId'));
+        $currentPage = ($currentPage == null) ? array() : $currentPage->toArray();
+        $parseContent = new Tools_Content_Parser('{$' . $this->getRequest()->getParam('widget') . '}', $currentPage, array('websiteUrl'   => $this->_helper->website->getUrl()));
+        $this->_helper->response->success($parseContent->parseSimple());
+    }
+
+	private function _loadPluginsTabs() {
+		if(!($pluginsTabsData = $this->_helper->cache->load(Helpers_Action_Cache::KEY_PLUGINTABS, Helpers_Action_Cache::PREFIX_PLUGINTABS))) {
+			$pluginsTabsData  = Tools_Plugins_Tools::getPluginTabContent();
+			$this->_helper->cache->save(Helpers_Action_Cache::KEY_PLUGINTABS, $pluginsTabsData, Helpers_Action_Cache::PREFIX_PLUGINTABS, array(), Helpers_Action_Cache::CACHE_LONG);
+		}
+		return $pluginsTabsData;
+	}
+
 	private function _processContent() {
 		if($this->_contentForm->isValid($this->getRequest()->getParams())) {
 			$containerData = $this->_contentForm->getValues();
-			$pageId        = ($containerData['containerType'] == Application_Model_Models_Container::TYPE_STATICCONTENT || $containerData['containerType'] == Application_Model_Models_Container::TYPE_STATICHEADER) ? 0 : $containerData['pageId'];
+			$pageId        = ($containerData['containerType'] == Application_Model_Models_Container::TYPE_STATICCONTENT || $containerData['containerType'] == Application_Model_Models_Container::TYPE_STATICHEADER || $containerData['containerType'] == Application_Model_Models_Container::TYPE_PREPOPSTATIC) ? null : $containerData['pageId'];
 			$containerId   = ($containerData['containerId']) ? $containerData['containerId'] : null;
 			$container     = new Application_Model_Models_Container();
 
 			$container->registerObserver(new Tools_Seo_Watchdog());
+			$container->registerObserver(new Tools_Search_Watchdog());
 			$container->registerObserver(new Tools_Content_GarbageCollector(array(
 				'action' => Tools_System_GarbageCollector::CLEAN_ONUPDATE
 			)));
 
-			$container->setId($containerData['containerId'])
+			$container->setId($containerId)
 				->setName($containerData['containerName'])
 				->setContainerType($containerData['containerType'])
 				->setPageId($pageId)
@@ -97,20 +142,21 @@ class Backend_ContentController extends Zend_Controller_Action {
 			else {
 				$container->setPublishingDate('');
 			}
-			$mapper = new Application_Model_Mappers_ContainerMapper();
-			$this->_helper->cache->clean($container->getName() . $pageId, 'widget_');
-			$this->getResponse()->setHttpResponseCode(200);
 
-			$saveResult = $mapper->save($container);
+            $cacheTag = preg_replace('/[^\w\d_]/', '', $container->getName() . '_' . $container->getContainerType() . '_pid_' . $container->getPageId());
+			$this->_helper->cache->clean(null, null, array($cacheTag));
+			$saveResult = Application_Model_Mappers_ContainerMapper::getInstance()->save($container);
+
 			if(!$container->getId()) {
 				$container->setId($saveResult);
 			}
 
-			$this->getResponse()->setBody($saveResult);
-			$this->getResponse()->sendResponse();
-
-			$container->notifyObservers(array('test' => 'val'));
-
+			try {
+				$container->notifyObservers();
+			} catch(Exceptions_SeotoasterWidgetException $twe) {
+				$this->_helper->response->fail($twe->getMessage());
+			}
+			$this->_helper->response->success($saveResult);
 			exit;
 		}
 		return false;
@@ -122,7 +168,16 @@ class Backend_ContentController extends Zend_Controller_Action {
 		switch ($this->_containerType) {
 			case Application_Model_Models_Container::TYPE_REGULARCONTENT:
 			case Application_Model_Models_Container::TYPE_STATICCONTENT:
-				$rendered = $this->view->render('backend/content/content.phtml');
+				$this->view->imagesSizes = array(
+					'small'  => $this->_helper->config->getConfig('imgSmall'),
+					'medium' => $this->_helper->config->getConfig('imgMedium'),
+					'large'  => $this->_helper->config->getConfig('imgLarge')
+				);
+                $this->view->linkResetCss     = Tools_Theme_Tools::urlResetCss();
+                $this->view->linkContentCss     = Tools_Theme_Tools::urlContentCss();
+				$this->view->pluginsEditorLinks = $this->_loadPluginsEditorLinks();
+				$this->view->pluginsEditorTop   = $this->_loadPluginsEditorTop();
+				$rendered                       = $this->view->render('backend/content/content.phtml');
 			break;
 			case Application_Model_Models_Container::TYPE_REGULARHEADER:
 			case Application_Model_Models_Container::TYPE_STATICHEADER:
@@ -133,6 +188,22 @@ class Backend_ContentController extends Zend_Controller_Action {
 			break;
 		}
 		return $rendered;
+	}
+
+	private function _loadPluginsEditorLinks() {
+		if(!($pluginsEditorLinks = $this->_helper->cache->load(Helpers_Action_Cache::KEY_PLUGINEDITOR_LINKS, Helpers_Action_Cache::PREFIX_PLUGINEDITOR_LINKS))) {
+			$pluginsEditorLinks  = Tools_Plugins_Tools::getPluginEditorLink();
+			$this->_helper->cache->save(Helpers_Action_Cache::KEY_PLUGINEDITOR_LINKS, $pluginsEditorLinks, Helpers_Action_Cache::PREFIX_PLUGINEDITOR_LINKS, array(), Helpers_Action_Cache::CACHE_LONG);
+		}
+		return $pluginsEditorLinks;
+	}
+
+	private function _loadPluginsEditorTop() {
+		if(!($pluginsEditorTop = $this->_helper->cache->load(Helpers_Action_Cache::KEY_PLUGINEDITOR_TOP, Helpers_Action_Cache::PREFIX_PLUGINEDITOR_TOP))) {
+			$pluginsEditorTop  = Tools_Plugins_Tools::getPluginEditorTop();
+			$this->_helper->cache->save(Helpers_Action_Cache::KEY_PLUGINEDITOR_LINKS, $pluginsEditorTop, Helpers_Action_Cache::PREFIX_PLUGINEDITOR_TOP, array(), Helpers_Action_Cache::CACHE_LONG);
+		}
+		return $pluginsEditorTop;
 	}
 
 	private function _initCorrectForm() {
@@ -150,6 +221,10 @@ class Backend_ContentController extends Zend_Controller_Action {
 			case Application_Model_Models_Container::TYPE_CODE:
 				$form = new Application_Form_Code();
 			break;
+            case Application_Model_Models_Container::TYPE_PREPOP:
+            case Application_Model_Models_Container::TYPE_PREPOPSTATIC:
+                $form = new Application_Form_Prepop();
+            break;
 		}
 		return $form;
 	}
@@ -189,12 +264,22 @@ class Backend_ContentController extends Zend_Controller_Action {
 			$imagesData  = array();
 			$folderName  = $this->getRequest()->getParam('folderName');
 			$imagesPath  = $this->_websiteData['path'] . $this->_websiteData['media'] . $folderName;
-			$imagesData  = array(
-				'small'    => $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_SMALL), $imagesPath, $folderName, self::IMG_CONTENTTYPE_SMALL),
-				'medium'   => $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_MEDIUM), $imagesPath, $folderName, self::IMG_CONTENTTYPE_MEDIUM),
-				'large'    => $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_LARGE), $imagesPath, $folderName, self::IMG_CONTENTTYPE_LARGE),
-				'original' => $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_ORIGINAL), $imagesPath, $folderName, self::IMG_CONTENTTYPE_ORIGINAL)
-			);
+			try {
+                $imagesData  = array(
+                    'small'    => '<div class="images-preview list-images">' . $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_SMALL), $imagesPath, $folderName, self::IMG_CONTENTTYPE_SMALL) . '</div>',
+                    'medium'   => '<div class="images-preview list-images">' . $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_MEDIUM), $imagesPath, $folderName, self::IMG_CONTENTTYPE_MEDIUM) . '</div>',
+                    'large'    => '<div class="images-preview list-images">' . $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_LARGE), $imagesPath, $folderName, self::IMG_CONTENTTYPE_LARGE) . '</div>',
+                    'original' => '<div class="images-preview list-images">' . $this->_proccessImages(Tools_Filesystem_Tools::scanDirectory($imagesPath . '/' . self::IMG_CONTENTTYPE_ORIGINAL), $imagesPath, $folderName, self::IMG_CONTENTTYPE_ORIGINAL) . '</div>'
+                );
+            }
+            catch(Exceptions_SeotoasterException $se) {
+                $imagesData = array(
+                    'small'    => $this->_helper->language->translate('No images were found'),
+                    'medium'   => $this->_helper->language->translate('No images were found'),
+                    'large'    => $this->_helper->language->translate('No images were found'),
+                    'original' => $this->_helper->language->translate('No images were found')
+                );
+            }
 			$this->getResponse()->setBody(json_encode($imagesData))->sendResponse();
 		}
 		exit;
@@ -205,20 +290,21 @@ class Backend_ContentController extends Zend_Controller_Action {
 			$folder             = $this->getRequest()->getParam('folder');
 			$filesPath          = $this->_websiteData['path'] . $this->_websiteData['media'] . $folder;
 			$this->view->files  = ((is_dir($filesPath))) ? Tools_Filesystem_Tools::findFilesByExtension($filesPath, '.*', false, false, false) : array();
-			$this->view->html   = $this->view->render('backend/content/files.phtml');
+			$this->view->html   = (($folder) ? $this->view->render('backend/content/files.phtml') : '<h3 class="text-center mt10px">' . $this->_helper->language->translate('Please, select a folder') . '</h3>');
 		}
 	}
 
 	private function _proccessImages(array $images, $path, $folder, $type) {
 		if(!empty ($images)) {
 			$imagesContent = '';
-			$srcPath       = $this->_websiteData['url'] . $this->_websiteData['media'] . $folder;
+			$srcPath = $this->_helper->website->getUrl() . $this->_helper->website->getMedia() . $folder;
 			foreach ($images as $key => $image) {
-				$imageName      = preg_replace('~\.(jpg|png|gif|jpeg)~i', '', $image);
+                $srcPath        = Tools_Content_Tools::applyMediaServers($srcPath);
+	            $imageName      = preg_replace('~\.(jpg|png|gif|jpeg)~i', '', $image);
 				$imageSize      = getimagesize($path . '/' . $type . '/' . $image);
-				$imageElement   = htmlspecialchars('<a href="javascript:;" data-url="' . $srcPath . '/' .  self::IMG_CONTENTTYPE_ORIGINAL . '/' . $image . '" title="' . str_replace('-', '&nbsp;', $imageName) . '" class="tpopup"><img border="0" alt="'. str_replace('-', '&nbsp;', $imageName) . '" src="' . $srcPath . '/' . $type . '/' . $image . '" width="' . $imageSize[0] . '" height="' . $imageSize[1] . '" /></a>');
-				$imagesContent .= '<a href="javascript:;" onmousedown="$(\'#content\').tinymce().execCommand(\'mceInsertContent\', false, \'' . $imageElement . '\');">';
-				$imagesContent .= '<img title="' . $image . '" style="vertical-align:top; margin: 0px 0px 4px 4px;" border="0" width="65" src="' . $srcPath . '/'. $type . '/' . $image .'" /></a>';
+				$imageElement   = htmlspecialchars('<a class="_lbox" href="' . $srcPath . '/' .  self::IMG_CONTENTTYPE_ORIGINAL . '/' . $image . '" title="' . str_replace('-', '&nbsp;', $imageName) . '"><img border="0" alt="'. str_replace('-', '&nbsp;', $imageName) . '" src="' . $srcPath . '/' . $type . '/' . $image . '" width="' . $imageSize[0] . '" height="' . $imageSize[1] . '" /></a>');
+				$imagesContent .= '<a href="javascript:;" onmousedown="tinymce.activeEditor.execCommand(\'mceInsertContent\', false, \'' . $imageElement . '\');">';
+				$imagesContent .= '<img title="' . $image . '" border="0" width="80" src="' . $srcPath . '/product/' . $image .'" /></a>';
 			}
 			return $imagesContent;
 		}
@@ -226,15 +312,80 @@ class Backend_ContentController extends Zend_Controller_Action {
 
 	public function loadwidgetmakerAction() {
 		$this->_helper->getHelper('layout')->disableLayout();
-		if($this->getRequest()->isPost()) {
+		if($this->getRequest()->isPost() || $this->getRequest()->isGet()) {
 			if(!($widgetMakerContent = $this->_helper->cache->load('widgetMakerContent', 'wmc_'))) {
 				$this->view->widgetsData = array_merge(Tools_Widgets_Tools::getWidgetmakerContent(), Tools_Plugins_Tools::getWidgetmakerContent());
 				$widgetMakerContent      = $this->view->render('backend/content/widgetmaker.phtml');
 				$this->_helper->cache->save('widgetMakerContent', $widgetMakerContent, 'wmc_', array(), Helpers_Action_Cache::CACHE_LONG);
 			}
-			$this->_helper->response->success($widgetMakerContent);
+			//$this->_helper->response->success($widgetMakerContent);
+			echo $widgetMakerContent;
 		}
 		exit;
 	}
+
+	public function refreshfoldersAction() {
+		$websiteData = Zend_Registry::get('website');
+		$this->_helper->response->success(Tools_Filesystem_Tools::scanDirectoryForDirs($websiteData['path'] . $websiteData['media']));
+	}
+
+    /**
+     * Clear all cache
+     * Called in adminPanelInit.min.js
+     */
+    public function cleancacheAction() {
+        if (Tools_Security_Acl::isAllowed(Tools_Security_Acl::RESOURCE_CONTENT)) {
+            try {
+                $this->_helper->cache->clean();
+                $this->_helper->response->success(
+                    $this->_helper->language->translate('The entire cache has been cleaned.')
+                );
+            }
+            catch (Exceptions_SeotoasterException $ste) {
+                $this->_helper->response->fail($ste->getMessage());
+            }
+        }
+    }
+
+    public function editrepeatAction()
+    {
+        $configRepeat = new Application_Form_Repeat();
+        $configRepeat->setAction($this->_helper->url->url());
+
+        $mapper = Application_Model_Mappers_ContainerMapper::getInstance();
+        $model  = new Application_Model_Models_Container();
+        $name   = MagicSpaces_Repeat_Repeat::PREFIX_CONTAINER.$this->getRequest()->getParam('repeatName');
+        $type   = $this->getRequest()->getParam('contentType');
+        $pageId = (Application_Model_Models_Container::TYPE_REGULARCONTENT == $type)
+            ? $this->getRequest()->getParam('pageId')
+            : null;
+        $data   = $mapper->findByName($name, $pageId, $type);
+        if ($data instanceof Application_Model_Models_Container) {
+            $model->setId($data->getId());
+
+            $content = explode(':', $data->getContent());
+            if (isset($content[0], $content[1])) {
+                $configRepeat->setQuantity($content[0]);
+                $configRepeat->setOrderContent($content[1]);
+            }
+        }
+
+        // Save
+        if ($this->getRequest()->isPost()) {
+            $configRepeat->setQuantity($this->getRequest()->getParam('quantity'));
+            $configRepeat->setOrderContent($this->getRequest()->getParam('orderContent'));
+
+            $model->setName($name)
+                ->setContainerType($type)
+                ->setPageId($pageId)
+                ->setContent($configRepeat->getQuantity().':'.$configRepeat->getOrderContent());
+
+            $mapper->save($model);
+        }
+
+        $this->view->configRepeat = $configRepeat;
+
+        echo $this->view->render('backend/magicspaces/repeat.phtml');
+    }
 }
 

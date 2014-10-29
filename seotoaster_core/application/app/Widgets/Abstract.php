@@ -1,74 +1,147 @@
 <?php
-
 /**
  * Description of Abstract
  *
  * @author iamne
  */
-abstract class Widgets_Abstract  implements Zend_Acl_Resource_Interface {
+abstract class Widgets_Abstract implements Zend_Acl_Resource_Interface
+{
+    /**
+     * Instance of Zend_View
+     *
+     * @var Zend_View
+     */
+    protected $_view           = null;
 
-	protected $_view           = null;
+    protected $_options        = null;
 
-	protected $_options        = null;
+    protected $_toasterOptions = null;
 
-	protected $_toasterOptions = null;
+    protected $_cache          = null;
 
-	protected $_cache          = null;
+    protected $_cacheId        = null;
 
-	protected $_cacheId        = null;
+    protected $_cachePrefix    = 'widgets_';
 
-	protected $_cachePrefix    = 'widget_';
+    protected $_cacheable      = true;
 
-	protected $_cacheable      = true;
+    protected $_cacheTags      = array();
 
-	protected $_translator     = null;
+    protected $_cacheLifeTime  = Helpers_Action_Cache::CACHE_WEEK;
 
-	public function  __construct($options = null, $toasterOptions = array()) {
-		$this->_options        = $options;
-		$this->_toasterOptions = $toasterOptions;
-		if($this->_cacheable === true) {
-			$this->_cache = Zend_Controller_Action_HelperBroker::getStaticHelper('Cache');
-			$this->_cacheId    = (!isset($this->_options[0])) ? strtolower(get_class($this)) : $this->_options[0];
-			if(isset($toasterOptions['id'])) {
-				$this->_cacheId .= $toasterOptions['id'];
-			}
-		}
-		$this->_translator = Zend_Registry::get('Zend_Translate');
-		$this->_init();
-	}
+    protected $_cacheData      = array();
 
-	protected function _init() {
-		
-	}
+    protected $_widgetId       = null;
 
-	public function  getResourceId() {
-		return Tools_Security_Acl::RESOURCE_WIDGETS;
-	}
+    protected $_developerModeStatus = false;
 
+    /**
+     * Instance of the Zend_Translate
+     *
+     * @var mixed|Zend_Translate
+     */
+    protected $_translator     = null;
 
-	public function render() {
-		$content = null;
-		if($this->_cacheable) {
-			if(null === ($content = $this->_loadFromCahce())) {
-				try {
-					$content = $this->_load();
-					$this->_cache->save($this->_cacheId, $content, $this->_cachePrefix);
-				}
-				catch (Exceptions_SeotoasterException $ste) {
-					$content = $ste->getMessage();
-				}
-			}
-		}
-		else {
-			$content = $this->_load();
-		}
-		return $content;
-	}
+    public function __construct($options = null, $toasterOptions = array())
+    {
+        $this->_options        = $options;
+        $this->_toasterOptions = $toasterOptions;
 
-	protected function _loadFromCahce() {
-		return $this->_cache->load($this->_cacheId, $this->_cachePrefix);
-	}
-	
-	abstract protected function _load();
+        /** Check developer mode status. */
+        $this->_developerModeStatus = (bool)Zend_Controller_Action_HelperBroker::getStaticHelper('config')->getConfig('enableDeveloperMode');
+
+        $this->_setDeveloperModeProp();
+
+        if ($this->_cacheable === true) {
+            $roleId = Zend_Controller_Action_HelperBroker::getStaticHelper('Session')->getCurrentUser()->getRoleId();
+            $this->_cache     = Zend_Controller_Action_HelperBroker::getStaticHelper('Cache');
+            $this->_widgetId  = strtolower(get_called_class());
+            $this->_widgetId .= (!empty($this->_options) ? '_'.implode('_', $this->_options) : '');
+
+            if (isset($toasterOptions['id'])) {
+                $this->_cacheId = 'page_'.$toasterOptions['id'];
+            }
+            else {
+                $this->_cacheId = strtolower(get_called_class());
+            }
+            $this->_cacheId .= '_'.$roleId.'_lifeTime_'.$this->_cacheLifeTime;
+        }
+
+        $this->_translator = Zend_Registry::get('Zend_Translate');
+        $this->_init();
+    }
+
+    protected function _init()
+    {
+
+    }
+
+    public function getResourceId()
+    {
+        return Tools_Security_Acl::RESOURCE_WIDGETS;
+    }
+
+    public function render()
+    {
+        $this->_setDeveloperModeProp();
+
+        if ($this->_cacheable) {
+            $this->_cacheData = $this->_loadFromCache();
+            if (isset($this->_cacheData['data'][$this->_widgetId])) {
+                $content = $this->_cacheData['data'][$this->_widgetId];
+            }
+            else {
+                try {
+                    $content = $this->_load();
+
+                    if ($this->_cacheData === null) {
+                        $this->_cacheData = array(
+                            'tags' => array(),
+                            'data' => array()
+                        );
+                    }
+
+                    if (is_array($this->_cacheTags) && !empty($this->_cacheTags)) {
+                        $this->_cacheData['tags'] = array_merge(
+                            $this->_cacheData['tags'],
+                            (!empty($this->_cacheData['tags']))
+                                ? array_diff($this->_cacheTags,  $this->_cacheData['tags'])
+                                : $this->_cacheTags
+                        );
+                    }
+
+                    $this->_cacheData['data'][$this->_widgetId] = $content;
+                    $this->_cache->save(
+                        $this->_cacheId,
+                        $this->_cacheData,
+                        $this->_cachePrefix,
+                        $this->_cacheData['tags'],
+                        $this->_cacheLifeTime
+                    );
+                }
+                catch (Exceptions_SeotoasterException $ste) {
+                    $content = $ste->getMessage();
+                }
+            }
+        }
+        else {
+            $content = $this->_load();
+        }
+
+        return $content;
+    }
+
+    protected function _setDeveloperModeProp()
+    {
+        if ($this->_developerModeStatus) {
+            $this->_cacheable = false;
+        }
+    }
+
+    protected function _loadFromCache()
+    {
+        return $this->_cache->load($this->_cacheId, $this->_cachePrefix);
+    }
+
+    abstract protected function _load();
 }
-

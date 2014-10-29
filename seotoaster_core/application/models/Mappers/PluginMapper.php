@@ -6,25 +6,36 @@ class Application_Model_Mappers_PluginMapper extends Application_Model_Mappers_A
 
 	protected $_model   = 'Application_Model_Models_Plugin';
 
-	public function save($plugin) {
+	public function save($plugin , $notify = true) {
 		if(!$plugin instanceof Application_Model_Models_Plugin) {
 			throw new Exceptions_SeotoasterException('Given parameter should be and Application_Model_Models_Plugin instance');
 		}
 		$data = array(
-			'name'   => $plugin->getName(),
-			'status' => $plugin->getStatus(),
-			'cache'  => intval($plugin->getCache()),
-			'tag'    => $plugin->getTag()
+			'name'     => $plugin->getName(),
+			'status'   => $plugin->getStatus(),
+			'tags'     => $plugin->getTags(true),
+			'license'  => $plugin->getLicense(),
+            'version'  => $plugin->getVersion()
 		);
 		if(!$plugin->getId()) {
-			return $this->getDbTable()->insert($data);
+			$status = $this->getDbTable()->insert($data);
 		}
 		else {
-			return $this->getDbTable()->update($data, array('id = ?' => $plugin->getId()));
+			$status = $this->getDbTable()->update($data, array('id = ?' => $plugin->getId()));
 		}
+        if ($notify === true) {
+		    $plugin->notifyObservers();
+        }
+		return  $status;
 	}
 
-	public function findByName($name) {
+    /**
+     * Find plugin by name
+     *
+     * @param string $name
+     * @return Application_Model_Models_Plugin|null
+     */
+    public function findByName($name) {
 		$where = $this->getDbTable()->getAdapter()->quoteInto('name = ?', $name);
 		$row   = $this->getDbTable()->fetchAll($where)->current();
 		if(null == $row) {
@@ -51,5 +62,23 @@ class Application_Model_Mappers_PluginMapper extends Application_Model_Mappers_A
 		$deleteResult = $this->getDbTable()->delete($where);
 		$plugin->notifyObservers();
 	}
+
+	public function deleteByName(Application_Model_Models_Plugin $plugin) {
+		$where = $this->getDbTable()->getAdapter()->quoteInto('name = ?', $plugin->getName());
+		$deleteResult = $this->getDbTable()->delete($where);
+		$plugin->notifyObservers();
+	}
+
+    public function getPluginDataById($id){
+        $where = $this->getDbTable()->getAdapter()->quoteInto('id = ?', $id);
+        $rowSet =  $this->getDbTable()->fetchAll($where);
+        if(null == $rowSet) {
+            return null;
+        }
+        foreach ($rowSet as $row) {
+            $entries[] =$row->toArray();
+        }
+        return $entries[0];
+    }
 }
 

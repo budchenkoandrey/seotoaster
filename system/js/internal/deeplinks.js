@@ -1,40 +1,70 @@
 $(function() {
 
-	$('#deeplink-massdel-run').button();
+	$('#urlType-label').hide();
 
 	loadDeeplinksList();
 
 	var urlDropDown = $('#url');
 	var urlLabel    = $('#url-label').find('label');
-	$('#domain-toggle-deeplinks').toggle(function(){
-		$(this).text('Internal?');
-		urlLabel.text('Type url');
-		$('#url').replaceWith('<input type="text" id="url" name="url" value="" placeholder="Type external url here..."/>');
-	},
-	function() {
-		$(this).text('External?');
-		urlLabel.text('Select page');
-		$('#url').replaceWith(urlDropDown);
+	$('#urlType').click(function() {
+		if($(this).prop('checked')){
+			$('#url').replaceWith(urlDropDown);
+		}else{
+			$('#url').replaceWith('<input type="text" id="url" name="url" value="http://" />');
+		}
+	});
+
+	$('#chk-all').click(function() {
+		 $('.deeplink-massdel').prop('checked', ($(this).prop('checked')) ? true : false);
 	})
 
+	 $('.deeplink-massdel').on('click', function() {
+		if(!$('.deeplink-massdel').not(':checked').length) {
+			$('#chk-all').attr('checked', true);
+		}
+		else {
+			$('#chk-all').attr('checked', false);
+		}
+	 })
+
 	$('#deeplink-massdel-run').click(function() {
+        showSpinner();
 		var ids = [];
 		$('.deeplink-massdel:checked').each(function() {
 			ids.push($(this).attr('id'));
 		});
-		var url      = $('#website_url').val() + 'backend/backend_seo/removedeeplink/'
-		var callback = $('#frm-deeplinks').data('callback');
-		$.post(url, {id: ids}, function() {
-			if(callback) {
-				eval(callback + '()');
-			}
-			$('#ajax_msg').text('Done').fadeOut();
-		})
-	})
-})
+		if(!ids.length) {
+            hideSpinner();
+			showMessage('Select at least one item, please', true);
+			return false;
+		}
+		showConfirm('You are about to remove one or many deeplinks. Are you sure?', function() {
+			var callback = $('#frm-deeplinks').data('callback');
+			$.ajax({
+				url: $('#website_url').val() + 'backend/backend_seo/removedeeplink/',
+				type: 'post',
+				data: {
+					id: ids
+				},
+				dataType: 'json',
+				beforeSend: function() {showSpinner();},
+				success: function(response) {
+					hideSpinner();
+					showMessage(response.responseText, response.error);
+					if(typeof callback != 'undefined') {
+						eval(callback + '()');
+					}
+				}
+			});
+		});
+	});
+});
 
 function loadDeeplinksList() {
+	showSpinner();
 	$.getJSON($('#website_url').val() + 'backend/backend_seo/loaddeeplinkslist/', function(response) {
 		$('#deeplinks-list').html(response.deeplinksList);
+		hideSpinner();
+		checkboxRadioStyle();
 	})
 }

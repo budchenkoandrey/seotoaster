@@ -44,14 +44,15 @@ class Helpers_Action_Response extends Zend_Controller_Action_Helper_Abstract {
 	}
 
 	private function _response($body, $error = 0, $code = 200, $headers = '') {
-		$responseData = json_encode(array(
+		$responseData = Zend_Json::encode(array(
 			'error'        => $error,
 			'responseText' => $body,
 			'httpCode'     => $code
 		));
 		$response = $this->getResponse();
 		$response->setHttpResponseCode($code)
-			->setBody($responseData);
+			->setBody($responseData)
+            ->setHeader('Content-Type', 'application/json', true);
 
 		if($headers) {
 			if(is_array($headers) && !empty ($headers)){

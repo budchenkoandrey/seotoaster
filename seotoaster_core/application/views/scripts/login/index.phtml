@@ -1,47 +1,59 @@
-<?php $this->headLink()->appendStylesheet($this->websiteUrl . 'system/uithemes/seotoasterui/seotoasterui.css'); ?>
-<?php $this->headLink()->appendStylesheet($this->websiteUrl . 'system/css/reset.css'); ?>
-<?php $this->headLink()->appendStylesheet($this->websiteUrl . 'system/css/grid.css'); ?>
-<?php $this->headLink()->appendStylesheet($this->websiteUrl . 'system/css/seotoaster.css'); ?>
+<?php
+    $this->headLink()
+        ->prependStylesheet($this->websiteUrl . 'system/css/seotoaster.css')
+        ->prependStylesheet($this->websiteUrl . 'system/css/seotoaster-ui.css')
+        ->prependStylesheet($this->websiteUrl . 'system/css/reset.css');
+?>
 <?php echo $this->headLink(); ?>
 
-<div style="font-family: Arial; padding: 5px; font-size: 0.8em;">
-	<a style="color: #c6c6c6;" href="<?php echo $this->websiteUrl; ?>" title="Are you lost?">&larr; back to <?php echo $_SERVER['SERVER_NAME']; ?></a>
+<div>
+	<a href="<?php echo $this->websiteUrl; ?>" title="<?php echo $this->translate('Are you lost?'); ?>">&larr; <?php echo $this->translate('back to'); ?>&nbsp;<?php echo $_SERVER['SERVER_NAME']; ?></a>
 </div>
 
-<?php if (count($this->messages)) : ?>
-	<ul id="messages" class="ui-state-error w350" style="margin: 0px auto; list-style-type: none; padding: 15px 0px; text-align: center;">
-		<?php foreach ($this->messages as $message) : ?>
-			<li><?php echo $this->escape($message); ?></li>
-		<?php endforeach; ?>
-	</ul>
-<?php endif; ?>
-
-<div class="seotoaster container_12 w400 h300 rounded8px" style="box-shadow: 0px 0px 30px #c8c8c8; margin: 10% auto 0px auto; padding-bottom: 0px;">
-	<div class="header" style="border-radius: 5px; -moz-border-radius: 5px; -webkit-border-radius: 5px;">
-		<h1><?php echo $this->translate('Login'); ?></h1>
+<div class="seotoaster container go-form">
+	<div class="header">
+		<?php echo $this->translate('Welcome Back'); ?>
+        <div class="fl-right">
+            <?php if(isset($this->languages) && is_array($this->languages) && !empty($this->languages)): ?>
+				<?php foreach($this->languages as $lang): ?>
+					<a class="flag-button" title="<?php echo ($this->translate('Select ') . $lang['language'] . $this->translate(' language'));?> " href="#">
+						<img alt="<?php echo $lang['language']; ?>" class="lang-select" data-lng="<?php echo $lang['name']; ?>" src="<?php echo $this->websiteUrl . $lang['flag']; ?>" border="0" />
+					</a>
+				<?php endforeach; ?>
+			<?php endif; ?>
+		</div>
 	</div>
 
-	<div class="textcentered mb10px">
-		<?php if(isset($this->flagsFiles) && is_array($this->flagsFiles) && !empty($this->flagsFiles)): ?>
-			<?php foreach($this->flagsFiles as $flagFileName => $flagFilePath): ?>
-				<img alt="<?php echo $flagFileName; ?>" class="lang-select" id="<?php echo $flagFileName; ?>" src="<?php echo $this->websiteUrl . 'system/images/flags/' . $flagFilePath; ?>" border="0" />&nbsp;
-			<?php endforeach; ?>
-		<?php endif; ?>
-	</div>
-    <div class="clear"></div>
-	<div class="grid_12">
-		<form action="<?php echo $this->url(); ?>" method="post" >
-			<fieldset>
-				<legend><?php echo $this->translate('Welcome Back'); ?></legend>
-					<dl class="Zend_Form">
-						<?php
-							echo $this->loginForm->email;
-							echo $this->loginForm->password;
-						?>
-					</dl>
-			</fieldset>
-			<?php echo $this->loginForm->submit; ?>
-		</form>
-	</div>
-	<div class="clear"></div>
+	<form class="grid_12 mt15px pl2 pr2" action="<?php echo $this->url(); ?>" method="post" >
+		<p><?php
+                echo $this->loginForm->getElement('email')->renderLabel();
+			    echo $this->loginForm->getElement('email')->renderViewHelper();
+            ?>
+        </p>
+        <p><?php
+                echo $this->loginForm->getElement('password')->renderLabel();
+                echo $this->loginForm->getElement('password')->renderViewHelper();
+		    ?>
+        </p>
+        <div class="footer">
+            <?php echo $this->loginForm->getElement('submit')->renderViewHelper();?>
+            <a id="forgot-password" href="<?php echo $this->websiteUrl; ?>login/retrieve/"><?php echo $this->translate('Forgot password?'); ?></a>
+        </div>
+	</form>
 </div>
+
+<script type="text/javascript" charset="utf-8">
+<?php $this->jQuery()->onLoadCaptureStart(); ?>
+	$('.lang-select').on('click', function(e) {
+        e.preventDefault();
+		$.post( $('#website_url').val() + 'language/', {lng: $(this).data('lng')}, function() {
+			window.location.reload();
+		})
+	});
+    showTooltip('.notvalid', 'error', 'right');
+    $('.notvalid').on('keyup', function(){
+        $(this).tooltip('destroy').removeClass('notvalid').removeAttr('title');
+        $(this).unbind();
+    })
+<?php $this->jQuery()->onLoadCaptureEnd(); ?>
+</script>

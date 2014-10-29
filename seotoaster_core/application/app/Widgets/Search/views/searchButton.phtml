@@ -1,0 +1,33 @@
+<?php $formId = uniqid('search-btn-'); ?>
+<input id="<?php echo $formId; ?>" type="button" name="searchButton" class="searchButton" value="<?php echo $this->translate('Search');?>"/>
+<script type="text/javascript">
+    $('#<?php echo $formId; ?>').on('click', function () {
+        var urlAction = "<?php echo $this->websiteUrl; ?>backend/search/complexSearch/",
+            searchValues = [],
+            containerNames = [];
+        $('select.searchParams option:selected').each(function () {
+            searchValues.push($(this).val());
+        });
+        $('select.searchParams').each(function () {
+            containerNames.push($(this).attr('name'));
+        });
+        $.ajax({
+            type: "POST",
+            url: urlAction,
+            dataType: "json",
+            data: {
+                searchValues: searchValues,
+                containerNames: containerNames,
+                resultsPageId:<?php echo $this->pageResultsPage;?>
+
+            },
+            success: function (data) {
+                if (data.redirect !== 'undefined') {
+                    window.location = data.redirect;
+                }
+            }
+
+        });
+        return false;
+    });
+</script>

@@ -1,7 +1,58 @@
-<?php foreach ($this->widgetsData as $key => $widgetData): ?>
-	<?php if($key != 0): ?>
-		<hr class="hrseparate" />
-	<?php endif; ?>
-	<h3><?php echo $this->translate($widgetData['title']); ?></h3>
-	<?php echo $widgetData['content']; ?>
+<?php foreach($this->widgetsData as $key => $widgetData): ?>
+    <?php $this->accordionPane('widgets_maker', $widgetData['content'], array(
+        'title' => (isset($widgetData['title']) ? ((isset($widgetData['icons']) ? '<img src="' . $widgetData['icons'][0] . '" />' : '') . $widgetData['title']) : 'NOTITLE'),
+    )); ?>
 <?php endforeach; ?>
+<?php echo $this->accordionContainer('widgets_maker'); ?>
+<script type="text/javascript">
+	$(function(){
+        checkboxRadioStyle();
+        $('#widgets_maker').accordion({
+            heightStyle : "content",
+            collapsible : true,
+            active      : false,
+            icons       : false
+        });
+        $(document).on('click', '.apply-widget', function(){
+            var error = false, widgetForm = $(this).closest('form'), widgetHtml = '{$'+widgetForm.data('name');
+
+            widgetForm.find(':input:visible, label:visible>:checkbox').not('[type=hidden], [type=submit]').each(function(){
+                if($(this).hasClass('ignore-empty-val') && $(this).val()==''){
+                    return;
+                }
+                if($(this).attr('type')=='checkbox' && !$(this).prop('checked')){
+                    if($(this).hasClass('allowzero')){
+                        widgetHtml += ':0';
+                    }
+                    return;
+                }
+                if($(this).hasClass('validate')){
+                    if(!$(this).val() || $(this).val()==0){
+                        $(this).addClass('error');
+                        error = true;
+                    }
+                }
+
+                if(!error){
+                    if($(this).val()=='imgc'){
+                        widgetHtml = widgetHtml.replace(':img', '');
+                    }
+                    widgetHtml += ':'+$(this).val();
+                }
+            });
+            if(!error){
+                widgetHtml += '}';
+                tinymce.activeEditor.execCommand('mceInsertContent', false, widgetHtml);
+            }
+        });
+
+        //loading forlders list
+        $.getJSON($('#website_url').val()+'backend/backend_media/loadfolders/img/1', function(response){
+            $.each(response.responseText, function(val){
+                $('.folders').append($('<option></option>').attr({
+                        value : val
+                    }).text(val));
+            })
+        });
+    })
+</script>

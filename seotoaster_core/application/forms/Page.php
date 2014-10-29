@@ -28,6 +28,12 @@ class Application_Form_Page extends Zend_Form {
 
 	protected $_pageId          = '';
 
+	protected $_draft           = false;
+
+	protected $_publishAt       = '';
+
+	protected $_pageOption      = 0;
+
 	public function init() {
 		$this->setMethod(Zend_Form::METHOD_POST);
 
@@ -55,7 +61,9 @@ class Application_Form_Page extends Zend_Form {
 			'label'    => 'Page URL in address bar',
 			'value'    => $this->_url,
 			'required' => true,
-			'filters'  => array('StringTrim'),
+			'filters'  => array(
+				new Zend_Filter_StringTrim('.')
+			)
 		)));
 
 		$this->addElement(new Zend_Form_Element_Text(array(
@@ -67,25 +75,21 @@ class Application_Form_Page extends Zend_Form {
 			'filters'  => array('StringTrim')
 		)));
 
-		$this->addElement(new Zend_Form_Element_Textarea(array(
-			'name'     => 'metaDescription',
-			'id'       => 'meta-description',
-			'cols'     => '45',
-			'rows'     => '7',
-			'label'    => 'Meta description',
-			'class'    => 'h100',
-			'value'    => $this->_metaDescription,
+		$this->addElement(new Zend_Form_Element_Text(array(
+			'name'     => 'metaKeywords',
+			'id'       => 'meta-keywords',
+			'label'    => 'Meta keywords',
+			'value'    => $this->_metaKeywords,
 			'filters'  => array('StringTrim')
 		)));
 
 		$this->addElement(new Zend_Form_Element_Textarea(array(
-			'name'     => 'metaKeywords',
-			'id'       => 'meta-keywords',
+			'name'     => 'metaDescription',
+			'id'       => 'meta-description',
 			'cols'     => '45',
-			'rows'     => '3',
-			'label'    => 'Meta keywords',
-			'class'    => 'h80',
-			'value'    => $this->_metaKeywords,
+			'rows'     => '4',
+			'label'    => 'Meta description',
+			'value'    => $this->_metaDescription,
 			'filters'  => array('StringTrim')
 		)));
 
@@ -93,10 +97,8 @@ class Application_Form_Page extends Zend_Form {
 			'name'     => 'teaserText',
 			'id'       => 'teaser-text',
 			'cols'     => '45',
-			'rows'     => '3',
-			'label'    => 'Teaser Text',
+			'rows'     => '6',
 			'value'    => $this->_teaserText,
-			'class'    => 'hldd00',
 			'filters'  => array('StringTrim')
 		)));
 
@@ -104,45 +106,45 @@ class Application_Form_Page extends Zend_Form {
 			'name' => 'inMenu',
 			'multiOptions' => array(
 				Application_Model_Models_Page::IN_MAINMENU   => 'Main Menu',
-				Application_Model_Models_Page::IN_STATICMENU => 'Static Menu',
+				Application_Model_Models_Page::IN_STATICMENU => 'Flat Menu',
 				Application_Model_Models_Page::IN_NOMENU     => 'No Menu'
 			),
-			'required' => true,
+			'label'     => 'Navigation',
+			'required'  => true,
 			'separator' => ''
 		)));
 
 		$this->addElement(new Zend_Form_Element_Select(array(
 			'name'         => 'pageCategory',
 			'id'           => 'page-category',
+			'label'        => 'Main menu',
+			'class'        => 'mb5px',
 			'multiOptions' => array(
 				'Seotoaster' => array(
-					Application_Model_Models_Page::IDCATEGORY_CATEGORY => 'This page is a category',
-					Application_Model_Models_Page::IDCATEGORY_DEFAULT  => 'This page is in no menu',
-					Application_Model_Models_Page::IDCATEGORY_DRAFT    => 'This page is draft',
-					Application_Model_Models_Page::IDCATEGORY_PRODUCT  => 'Product pages'
+					Application_Model_Models_Page::IDCATEGORY_CATEGORY => 'This page is a category'
 				)
-			)
+			),
+			'registerInArrayValidator' => false,
+            'required' => true
 		)));
 
-		$this->addElement(new Zend_Form_Element_Checkbox(array(
-			'name'    => 'is404page',
-			'id'      => '404-page',
-			'label'   => 'Not found 404 page',
-			'value'   => $this->_is404page,
-			'checked' => ($this->_is404page) ? 'checked' : ''
-		)));
+        // Disabling translator for the list of categories
+        $this->getElement('pageCategory')->setDisableTranslator(true);
 
-		$this->addElement(new Zend_Form_Element_Checkbox(array(
-			'name'    => 'protected',
-			'id'      => 'protected-page',
-			'label'   => 'Protected page',
-			'value'   => $this->_protected,
-			'checked' => ($this->_protected) ? 'checked' : ''
+		$this->addElement(new Zend_Form_Element_Select(array(
+			'name'         => 'extraOptions',
+			'id'           => 'page-options',
+			'class'        => 'grid_8 alpha omega',
+			'multiOptions' => array_merge(array('0' => 'Select an option'), Tools_Page_Tools::getPageOptions(true)),
+			'registerInArrayValidator' => false,
+			'value' => $this->_pageOption
 		)));
 
 		$this->addElement(new Zend_Form_Element_Hidden(array(
 			'id'       => 'templateId',
 			'name'     => 'templateId',
+			'required' => true,
+			'label'    => 'Current template',
 			'value'    => $this->_templateId
 		)));
 
@@ -152,11 +154,38 @@ class Application_Form_Page extends Zend_Form {
 			'value' => $this->_pageId
 		)));
 
-		$this->addElement(new Zend_Form_Element_Submit(array(
+		$this->addElement(new Zend_Form_Element_Hidden(array(
+			'id'    => 'draft',
+			'name'  => 'draft',
+			'value' => $this->_draft
+		)));
+
+		$this->addElement(new Zend_Form_Element_Hidden(array(
+			'id'    => 'optimized',
+			'name'  => 'optimized'
+		)));
+
+		$this->addElement(new Zend_Form_Element_Hidden(array(
+			'id'    => 'publish-at',
+			'name'  => 'publishAt',
+			'value' => $this->_publishAt
+		)));
+
+		$this->addElement(new Zend_Form_Element_Button(array(
 			'name'  => 'updatePage',
 			'id'    => 'update-page',
-			'value' => 'Save page'
+			'type'  => 'submit',
+			'value' => 'Save page',
+			'class' => 'btn ticon-save mr-grid',
+			'label' => 'Save page',
+			'escape'=> false
 		)));
+
+        $this->addElement(new Zend_Form_Element_Hidden(array(
+            'id'    => 'removePreviousOption',
+            'name'  => 'removePreviousOption',
+            'value' => $this->_removePreviousOption
+        )));
 
 		//$this->setDecorators(array('ViewScript'));
 		$this->setElementDecorators(array('ViewHelper', 'Label'));
@@ -188,7 +217,7 @@ class Application_Form_Page extends Zend_Form {
 	}
 
 	public function setUrl($url) {
-		$this->_url = preg_replace('~\.[a-z0-9]+$~ui', '', $url);
+		$this->_url = preg_replace('~\.[a-z0-9-]+$~ui', '', $url);
 		$this->getElement('url')->setValue($this->_url);
 		return $this;
 	}
@@ -242,26 +271,6 @@ class Application_Form_Page extends Zend_Form {
 		return $this->_inMenu;
 	}
 
-	public function getIs404page() {
-		return $this->_is404page;
-	}
-
-	public function setIs404page($is404page) {
-		$this->_is404page = $is404page;
-		$this->getElement('is404page')->setValue($is404page);
-		return $this;
-	}
-
-	public function getProtected() {
-		return $this->_protected;
-	}
-
-	public function setProtected($protected) {
-		$this->_protected = $protected;
-		$this->getElement('protected')->setValue($protected);
-		return $this;
-	}
-
 	public function getParentId() {
 		return $this->_parentId;
 	}
@@ -291,5 +300,58 @@ class Application_Form_Page extends Zend_Form {
 		$this->getElement('pageId')->setValue($pageId);
 		return $this;
 	}
+
+	public function getDraft() {
+		return $this->_draft;
+	}
+
+	public function setDraft($draft) {
+		$this->_draft = $draft;
+		$this->getElement('draft')->setValue($draft);
+		return $this;
+	}
+
+	public function getPublishAt() {
+		return $this->_publishAt;
+	}
+
+	public function setPublishAt($publishAt) {
+		$this->_publishAt = $publishAt;
+		$this->getElement('publishAt')->setValue($publishAt);
+		return $this;
+	}
+
+	public function getMainMenuOptions() {
+		return $this->getElement('pageCategory')->getMultiOptions();
+	}
+
+	public function lockField($fieldName) {
+		$this->getElement($fieldName)
+			->setAttribs(array(
+				'disabled' => true,
+				'readonly' => true,
+                'class'    => 'noedit'
+			));
+	}
+
+	public function lockFields($fields) {
+		foreach($fields as $fieldName) {
+			$this->lockField($fieldName);
+		}
+	}
+
+    /**
+     * Page form validation.
+     *
+     * Along with the standart validation user selection will be validated too
+     *
+     * @param array $data
+     * @return bool
+     */
+    public function isValid($data) {
+        return (($data['pageCategory'] != -4) && parent::isValid($data));
+    }
+
+
 }
 

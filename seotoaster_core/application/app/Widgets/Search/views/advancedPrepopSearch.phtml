@@ -1,0 +1,105 @@
+<?php $this->headScript()->appendFile($this->websiteUrl.'system/js/external/underscore/underscore.min.js');?>
+<div class="advancedPrepopSearch">
+    <?php if(isset($this->prepopNameValues) && !empty($this->prepopNameValues)):?>
+        <?php foreach($this->prepopNames as $prepopName):?>
+                <?php if(!empty($this->prepopLabels) && isset($this->prepopLabels[$prepopName])):?>
+                     <label class="advancedSearchLabel"><?php echo $this->prepopLabels[$prepopName];?></label>
+                <?php else:?>
+                     <label class="advancedSearchLabel"><?php echo $prepopName;?></label>
+                <?php endif;?>
+                <select class="searchAdvancedPrepop searchParams" name="<?php echo $prepopName?>">
+                    <option value="select">select</option>
+                    <?php asort($this->prepopNameValues[$prepopName]);?>
+                    <?php foreach($this->prepopNameValues[$prepopName] as $value):?>
+                        <?php if(in_array($prepopName,$this->prepopWithQuantity)):?>
+                            <option value="<?php echo $value['content']?>"><?php echo $value['content']?><?php echo ' ('.$value['quantity'].')'?></option>
+                        <?php else:?>
+                            <option value="<?php echo $value['content']?>"><?php echo $value['content']?></option>
+                        <?php endif;?>                
+                   <?php endforeach;?>
+                </select>
+        <?php endforeach;?>
+    <?php endif;?>
+</div>
+ 
+<?php $this->jQuery()->onLoadCaptureStart() ?>
+     $(function() {
+        var searchArray = <?php echo $this->searchArray;?>;
+        var prepopNamePageIds = <?php echo $this->prepopNamePageIds;?>;
+        var prepopSelectNamesClone = $('.advancedPrepopSearch').clone(true, true);
+        $(document).on('change', '.searchAdvancedPrepop', function(e) {
+            var prepopName = $(this).attr('name');
+            var prepopSelectedValue = $("option:selected", this).val();
+            var prepopSelectedIds = '';
+            var prepopSelectNames = $(this).closest('.advancedPrepopSearch').find('select');
+            var resultSelectedId = [];
+            var selectsQuantity = 0;
+            var selectsInSearch = 0;
+            var diffPrepop = '';
+                                    
+            $.each(prepopSelectNames, function () {
+                var previousSelectedValue  = $("option:selected", this).val();
+                if($(this).attr('name') != prepopName){
+                    $('select[name="'+$(this).attr('name')+'"]').empty();
+                    $('select[name="'+$(this).attr('name')+'"]').append('<option value="select">select</option>');
+                    if(previousSelectedValue != 'select'){
+                        $('select[name="'+$(this).attr('name')+'"]').append($('select[name="'+$(this).attr('name')+'"] [value="'+previousSelectedValue+'"]', prepopSelectNamesClone).clone(true,true));
+                    }
+                    $('select[name="'+$(this).attr('name')+'"] [value="'+previousSelectedValue+'"]').attr("selected", "selected");
+                }
+                selectsInSearch = selectsInSearch + 1;
+                if($("option:selected", this).val() != 'select'){
+                    diffPrepop = $(this).attr('name');
+                    var diffPrepopSelectedValue = $("option:selected", this).val();
+                    $.each(prepopNamePageIds, function (name, ids) {
+                        if(name == diffPrepop){
+                            prepopSelectedIds = ids[diffPrepopSelectedValue];
+                            if(_.isEmpty(resultSelectedId)){
+                                resultSelectedId = prepopSelectedIds;
+                            }else{
+                                resultSelectedId = _.filter(prepopSelectedIds, function(num, key){ 
+                                    return _.include(resultSelectedId, key);
+                                });
+                            }
+
+                         }
+                    });
+                }
+                if($("option:selected", this).val() == 'select'){
+                   selectsQuantity = selectsQuantity +1;
+                }
+                    
+            });
+            if(selectsQuantity == selectsInSearch){
+                $.each(prepopNamePageIds, function (name, ids) {
+                    $('select[name="'+name+'"]').empty();
+                    $('select[name="'+name+'"]').append($('select[name="'+name+'"] option', prepopSelectNamesClone).clone(true,true));
+                });
+                return false;
+            }
+                      
+            var filtredValues = _.filter(searchArray, function(num, key){ 
+                return _.include(resultSelectedId, key);
+            });
+            
+            _.each(filtredValues, function(id, value){ 
+                _.each(id, function(pValue, pName){
+                    if($('select[name="'+pName+'"] [value="'+pValue+'"]').length < 1){
+                        $('select[name="'+pName+'"]').append($('select[name="'+pName+'"] [value="'+pValue+'"]', prepopSelectNamesClone).clone(true,true));
+                    }
+                });
+            });
+            
+            if(selectsQuantity == selectsInSearch - 1){
+                var previousSelectedDiff = $('select[name="'+diffPrepop+'"] option:selected').val();
+                $('select[name="'+diffPrepop+'"]').empty();
+                $.each(prepopSelectNames, function () {
+                    $('select[name="'+$(this).attr('name')+'"] [value="'+$("option:selected", this).val()+'"]').attr("selected", "selected");
+                });
+                $('select[name="'+diffPrepop+'"]').append($('select[name="'+diffPrepop+'"] option', prepopSelectNamesClone).clone(true,true));
+                $('select[name="'+diffPrepop+'"] [value="'+previousSelectedDiff+'"]').attr("selected", "selected");
+            }
+        });
+    });
+<?php $this->jQuery()->onLoadCaptureEnd() ?>
+

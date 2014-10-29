@@ -11,7 +11,7 @@ class Application_Form_Content extends Application_Form_Container {
 		$this->addElement('textarea', 'content', array(
 			'id'       => 'content',
 			'cols'     => '85',
-			'rows'     => '27',
+			'rows'     => '30',
 			'class'    => 'tinymce',
 			'value'    => $this->_content,
 			'filters'  => array('StringTrim')
@@ -21,15 +21,5 @@ class Application_Form_Content extends Application_Form_Container {
 
 		$this->removeDecorator('DtDdWrapper');
 		$this->removeDecorator('DlWrapper');
-
-		$this->getElement('submit')->setDecorators(array(
-			'ViewHelper',
-            'Errors',
-			array(
-				array('data' => 'HtmlTag'),
-				array('tag' => 'div')
-			)
-		));
-
     }
 }

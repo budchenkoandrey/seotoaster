@@ -1,53 +1,63 @@
-<form id="<?php echo $this->formId; ?>" method="<?php echo Zend_Form::METHOD_POST; ?>" action="<?php echo $this->actionUrl;?>">
-	<div>
-		<button id="<?php echo $this->formId; ?>-pickfiles"><?php echo $this->translate($this->buttonCaption); ?></button>
-	</div>
-</form>
-<?php $jsValName = 'js'.str_replace(' ','',ucwords(str_replace('-', ' ', $this->formId))); ?>
+<div id="<?php echo $this->formId; ?>" >
+<?php if ($this->formType == 'dragdrop'): ?>
+    <div style="cursor:pointer;" id="<?php echo $this->formId; ?>-dragdrop" data-url="<?php echo $this->actionUrl;?>" ><?php echo $this->translate($this->buttonCaption); ?></div>
+<?php else: ?>
+    <button class="btn" style="cursor:pointer;" id="<?php echo $this->formId; ?>-pickfiles" data-url="<?php echo $this->actionUrl;?>" ><?php echo $this->translate($this->buttonCaption); ?></button>
+<?php endif; ?>
+</div>
+<?php
+$jsValName = 'js'.str_replace(' ','',ucwords(str_replace('-', ' ', $this->formId)));
+switch ($this->caller){
+	case 'templatePreview':
+		$maxWidth  = $this->config['templatePreviewWidth'];
+		$maxHeight = $this->config['templatePreviewHeight'];
+		break;
+	case 'pagePreview':
+		$maxWidth  = ($this->teaserSize) ? $this->teaserSize : $this->config['pageTeaserSize'];
+        $maxHeight = 'none';
+		break;
+	default:
+		$maxWidth = $this->config['imgMaxWidth'];
+		$maxHeight = $maxWidth;
+		break;
+}
+
+$pluploadOptions = array(
+    'runtimes' => 'html5,flash,html4',
+    'browse_button' => $this->formId.'-pickfiles',
+    'rename' => true,
+    'unique_names' => false,
+    'max_file_size' => $this->allowedUploadData['fileSize'].'mb',
+    'max_file_count' => $this->allowedUploadData['fileUploads'],
+    'url' => $this->actionUrl
+);
+if (!$this->disableResize) {
+    $pluploadOptions['resize'] = array(
+        'width' => $maxWidth,
+        'height' => $maxHeight,
+        'quality' => $this->config['imgQuality']
+    );
+}
+if ($this->formType == 'dragdrop') {
+    $pluploadOptions['dragdrop'] = true;
+    $pluploadOptions['drop_element'] = $this->formId . '-dragdrop';
+    $pluploadOptions['browse_button'] = $this->formId . '-dragdrop';
+}
+
+if (!empty($this->filters)) {
+    $pluploadOptions['filters'] = $this->filters;
+}
+?>
+<script>
+
 <?php $this->jQuery()->onLoadCaptureStart();?>
-	var <?php echo $jsValName; ?> = new plupload.Uploader({
-		runtimes : 'html5,flash,html4',
-		browse_button : '<?php echo $this->formId; ?>-pickfiles',
-		max_file_size : '10mb',
-		max_file_count: 10,
-		url : $('#<?php echo $this->formId; ?>').attr('action'),
-		<?php if (!$this->disableResize): ?>
-		<?php switch ($this->caller){
-			case 'templatePreview':
-				$maxWidth  = $this->config['template_preview_w'];
-				$maxHeight = $this->config['template_preview_h'];
-				break;
-			case 'pagePreview':
-				$maxWidth  = $this->config['page_teaser_size'];
-				$maxHeight = $this->config['page_teaser_size'];
-				break;
-			default:
-				$maxWidth = $this->config['img_max_width'];
-				$maxHeight = $maxWidth;
-				break;
-		}
-		?>
-		resize : {width : <?php echo $maxWidth; ?>, height : <?php echo $maxHeight; ?>, quality : <?php echo $this->config['img_quality']; ?>},
-		<?php endif; ?>
-		flash_swf_url : '<?php echo $this->websiteUrl;?>system/js/external/plupload/plupload.flash.swf',
-		<?php if ($this->filters): ?>
-		filters : [<?php foreach ($this->filters as $title){ echo $this->fileTypes[$title] ? json_encode($this->fileTypes[$title]).PHP_EOL : ''; } ?>]
-		<?php endif;?>
-	});
+	jQuery.ui && $('#<?php echo $this->formId; ?>-pickfiles').button();
+
+	window.<?php echo $jsValName; ?> = new plupload.Uploader(<?php echo json_encode($pluploadOptions); ?>);
 
 	<?php echo $jsValName; ?>.bind('Init', function(up, params) {
-		<?php if ($this->caller == 'templatePreview') : //positioning for template screen ?>
-		var pos = $('#template_preview').position();
-		var width = $('#template_preview').width();
-		var height = $('#template_preview').height();
-		$('#<?php echo $this->formId; ?>').css({
-			'position': 'absolute',
-			'left':	pos.left,
-			'top':	pos.top+height
-		});
-		<?php endif; ?>
 		if ($('#<?php echo $this->formId;?>-filelist').size() == 0) {
-			$('#<?php echo $this->formId;?>').before('<div id="<?php echo $this->formId;?>-filelist"></div>');
+			$('#<?php echo $this->formId;?>').after('<div id="<?php echo $this->formId;?>-filelist"></div>');
 		}
 		$('#<?php echo $this->formId; ?>-filelist').html('');
 	});
@@ -57,12 +67,38 @@
 	<?php echo $jsValName; ?>.bind('FilesAdded', function(up, files) {
 		$.each(files, function(i, file) {
 			$('#<?php echo $this->formId; ?>-filelist').prepend(
-                '<div class="ui-widget"><div class="ui-state-highlight ui-corner-all" id="' + file.id + '"><p>' +
+                '<div class="ui-widget"><div class="ui-state-highlight" id="' + file.id + '"><p>' +
                 file.name + ' (' + plupload.formatSize(file.size) + ')</p><div class="pbar"></div>' +
             '</div></div>');
 			$('#' + file.id + " .pbar").progressbar({value: 0})
 		});
-		up.refresh(); // Reposition Flash/Silverlight
+		<?php if ($this->caller == 'media'): ?>
+		$('#things-select-folder,#things-new-folder').attr('disabled', 'disabled');
+
+		var newfolder = $('#things-new-folder').val();
+		if ( newfolder !== $('#things-new-folder').attr('data-defaultlabel') && newfolder != '' ) {
+			<?php echo $jsValName; ?>.settings.multipart_params = {'folder': newfolder};
+		} else {
+			var folder = $('#things-select-folder').val();
+			if (folder != '0' && folder != '') {
+			<?php echo $jsValName; ?>.settings.multipart_params = {'folder': folder};
+			} else {
+				showMessage('<?php echo $this->translate('No folder specified'); ?>', true);
+
+				$.each(files, function(i, file) {
+					<?php echo $jsValName; ?>.removeFile(file);
+				} );
+			}
+		}
+   		$('#things-select-folder,#things-new-folder').removeAttr('disabled');
+		<?php endif; ?>
+		up.refresh();
+
+        if($('.change-image-quality').length>0 && newfolder !== $('#things-new-folder').attr('data-defaultlabel') && newfolder != '' || $('.change-image-quality').length>0 && $('#things-select-folder').val() != '0'){
+            if($('.change-image-quality').is(":checked")){
+               <?php echo $jsValName; ?>.settings.multipart_params.quality = 75;
+            }
+        }
 
 		<?php echo $jsValName; ?>.start();
 	});
@@ -79,7 +115,7 @@
 	});
 
     <?php echo $jsValName; ?>.bind('Error', function(up, err) {
-		$('#<?php echo $this->formId; ?>-filelist').prepend('<div class="ui-widget"><div class="ui-state-error ui-corner-all">'+
+		$('#<?php echo $this->formId; ?>-filelist').prepend('<div class="ui-widget"><div class="ui-state-error">'+
                      (err.file ? err.file.name : "") + ": " + err.message +
 					 '<span class="ui-icon ui-icon-alert"></span></div></div>'
 					 );
@@ -101,10 +137,17 @@
 			$('#' + file.id).html('<p><strong>' +file.name+'</strong>'
 			+ errorMessage.replace("'file'", file.name) + '<span class="ui-icon ui-icon-alert"></span></p>' );
 		} else {
-			$('#' + file.id).find('.pbar').remove().end().append('<span class="ui-icon ui-icon-check ui-corner-all"></span>');
+			$('#' + file.id).find('.pbar').remove().end().append('<span class="ui-icon ui-icon-check"></span>');
 		}
 		<?php if ($this->caller == 'themes') : ?>
-		$('#themes-list').trigger('updateContent');
+		if (response.error !== false){
+			$('#'+file.id).parent().remove();
+			showMessage(response.error.join('<br>'), true);
+		} else {
+			$('#themes-list').trigger('updateContent');
+		}
+
+        $('#'+file.id).parent().fadeOut(1000);
 		<?php elseif ($this->caller == 'templatePreview'): ?>
 		if (response.error == false && response.hasOwnProperty('thumb')){
 			$('#template_preview').attr('src', response.thumb);
@@ -119,34 +162,14 @@
 			}
 		}
 		<?php elseif($this->caller == 'plugin'): ?>
-			$('#plugin-uploader-filelist').fadeOut(_FADE_SLOW);
+			$('#plugin-uploader-filelist').fadeOut();
 			pluginCallback();
 		<?php endif; ?>
     });
 
 	<?php if ($this->caller == 'media'): ?>
 	<?php echo $jsValName; ?>.bind('BeforeUpload', function (up, file) {
-		$('#things-select-folder').attr('disabled', true);
-		$('#things-new-folder').attr('disabled', true);
-		var newfolder = $('#things-new-folder').val();
-		if ( newfolder !== $('#things-new-folder').attr('data-defaultlabel') && newfolder != '' ) {
-			<?php echo $jsValName; ?>.settings.multipart_params = {'folder': newfolder};
-		} else {
-			var folder = $('#things-select-folder').val();
-			if (folder != '0' && folder != '') {
-			<?php echo $jsValName; ?>.settings.multipart_params = {'folder': folder};
-			} else {
-			$('#ajax_msg').html('<?php echo $this->translate('No folder specified'); ?>')
-				.show()
-				.one('click', function(){$(this).hide()});
 
-			<?php echo $jsValName; ?>.removeFile(file);
-			<?php echo $jsValName; ?>.stop();
-			<?php echo $jsValName; ?>.refresh();
-			}
-		}
-   		$('#things-select-folder').removeAttr('disabled');
-		$('#things-new-folder').removeAttr('disabled');
 		});
 	<?php elseif ($this->caller == 'templatePreview'): ?>
 	<?php echo $jsValName; ?>.bind('BeforeUpload', function (up, file) {
@@ -157,4 +180,6 @@
 	<?php if ($this->noMultiupload) : ?>
 	$('.plupload > input:file').removeAttr('multiple');
 	<?php endif; ?>
+
 <?php $this->jQuery()->onLoadCaptureEnd(); ?>
+</script>

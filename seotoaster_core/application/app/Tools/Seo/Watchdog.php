@@ -7,7 +7,13 @@
  */
 class Tools_Seo_Watchdog implements Interfaces_Observer {
 
-	private $_object = null;
+	private $_options = array();
+
+	private $_object  = null;
+
+	public function __construct($options = array()) {
+		$this->_options = $options;
+	}
 
 	public function notify($object) {
 		$this->_object = $object;
@@ -37,17 +43,23 @@ class Tools_Seo_Watchdog implements Interfaces_Observer {
 	private function _pageUpdateChain() {
 		$this->_updateContainersUrls();
 		$this->_update301Redirects();
-		$this->_updateSitemap();
+		//$this->_updateSitemap();
 		$this->_updateDeeplinkUrl();
 	}
 
 	private function _contentUpdateChain() {
-		$this->_updateDeeplinks();
-		$this->_updateLinksTitles();
+		if(($this->_object->getContainerType() != Application_Model_Models_Container::TYPE_REGULARHEADER)
+			&& ($this->_object->getContainerType() != Application_Model_Models_Container::TYPE_STATICHEADER)) {
+
+			if(!isset($this->_options['unwatch']) || $this->_options['unwatch'] != '_updateDeeplinks') {
+				$this->_updateDeeplinks();
+			}
+			$this->_updateLinksTitles();
+		}
 	}
 
 	private function _updateDeeplinkUrl() {
-		$deeplinkMapper = new Application_Model_Mappers_DeeplinkMapper();
+		$deeplinkMapper = Application_Model_Mappers_DeeplinkMapper::getInstance();
 		$deeplinks      = $deeplinkMapper->findByPageId($this->_object->getId());
 		if(!empty($deeplinks)) {
 			foreach ($deeplinks as $deeplink) {
@@ -57,9 +69,15 @@ class Tools_Seo_Watchdog implements Interfaces_Observer {
 		}
 	}
 
-	private function _updateSitemap() {
-		$sitemapFeed = Tools_Content_Feed::generateSitemapFeed();
-		return Tools_Filesystem_Tools::saveFile('sitemap.xml', $sitemapFeed);
+    /**
+     * @todo remove in 2.0.6
+     * @deprecated
+     * @return bool
+     */
+    private function _updateSitemap() {
+		//$sitemapFeed = Tools_Content_Feed::generateSitemapFeed();
+		//return Tools_Filesystem_Tools::saveFile('sitemap.xml', $sitemapFeed);
+        return false;
 	}
 
 	private function _updateContainersUrls() {
@@ -76,16 +94,16 @@ class Tools_Seo_Watchdog implements Interfaces_Observer {
 		}
 
 		$fullOldUrl         = $websiteHelper->getUrl() . $sessionHelper->oldPageUrl;
-		$mapper             = new Application_Model_Mappers_LinkContainerMapper();
-		$containersToUpdate = $mapper->findByLink($fullOldUrl);
-		unset($mapper);
+		$containersToUpdate = Application_Model_Mappers_LinkContainerMapper::getInstance()->findByLink($fullOldUrl);
 
 		if(!empty ($containersToUpdate)) {
-			$mapper = new Application_Model_Mappers_ContainerMapper();
+			$mapper = Application_Model_Mappers_ContainerMapper::getInstance();
 			foreach ($containersToUpdate as $containerData) {
 				$container        = $mapper->find($containerData['id_container']);
 				$links            = Tools_Content_Tools::findLinksInContent($container->getContent(), true);
-				$container->registerObserver(new Tools_Content_GarbageCollector());
+				$container->registerObserver(new Tools_Content_GarbageCollector(array(
+                    'action' => Tools_System_GarbageCollector::CLEAN_ONUPDATE
+                )));
 				if(in_array($fullOldUrl, $links)) {
 					$fullNewUrl             = $websiteHelper->getUrl() . $this->_object->getUrl();
 					$withoutTitleUrlPattern = '~(<a\s+[^\s]*\s*href=")(' . $fullOldUrl . ')("\s*)(>.+</a>)~u';
@@ -103,7 +121,7 @@ class Tools_Seo_Watchdog implements Interfaces_Observer {
 	}
 
 	private function _update301Redirects() {
-		$mapper        = new Application_Model_Mappers_RedirectMapper();
+		$mapper        = Application_Model_Mappers_RedirectMapper::getInstance();
 		$sessionHelper = Zend_Controller_Action_HelperBroker::getStaticHelper('Session');
 		$cacheHelper   = Zend_Controller_Action_HelperBroker::getStaticHelper('Cache');
 		$websiteHelper = Zend_Controller_Action_HelperBroker::getStaticHelper('Website');
@@ -134,8 +152,8 @@ class Tools_Seo_Watchdog implements Interfaces_Observer {
 			$websiteHelper = Zend_Controller_Action_HelperBroker::getStaticHelper('Website');
 			$links         = array_unique(Tools_Content_Tools::findLinksInContent($this->_object->getContent(), true, Tools_Content_Tools::PATTERN_LINKWITHOUTTITLE));
 			if(!empty($links)) {
-				$pageMapper      = new Application_Model_Mappers_PageMapper();
-				$containerMapper = new Application_Model_Mappers_ContainerMapper();
+				$pageMapper      = Application_Model_Mappers_PageMapper::getInstance();
+				$containerMapper = Application_Model_Mappers_ContainerMapper::getInstance();
 				foreach ($links as $link) {
 					$page = $pageMapper->findByUrl(str_replace($websiteHelper->getUrl(), '', $link));
 
@@ -155,30 +173,31 @@ class Tools_Seo_Watchdog implements Interfaces_Observer {
 	}
 
 	private function _updateDeeplinks() {
-		$deeplinkMapper = new Application_Model_Mappers_DeeplinkMapper();
-		$deeplinks      = $deeplinkMapper->fetchAll();
-		$deeplinks      = Tools_System_Tools::bobbleSortDeeplinks($deeplinks);
+		$cacheHelper = Zend_Controller_Action_HelperBroker::getStaticHelper('Cache');
+		if(null === ($deeplinks = $cacheHelper->load(Helpers_Action_Cache::KEY_DEEPLINKS, Helpers_Action_Cache::PREFIX_DEEPLINKS))) {
+			$deeplinks = Application_Model_Mappers_DeeplinkMapper::getInstance()->fetchAll();
+			$deeplinks = Tools_System_Tools::bobbleSortDeeplinks($deeplinks);
+			$cacheHelper->save(Helpers_Action_Cache::KEY_DEEPLINKS, $deeplinks, Helpers_Action_Cache::PREFIX_DEEPLINKS, array(), Helpers_Action_Cache::CACHE_NORMAL);
+		}
 		if(!empty($deeplinks)) {
-			foreach($deeplinks as $deeplink) {
-				$this->_object->setContent(Tools_Content_Tools::applyDeeplink($deeplink, $this->_object->getContent()));
+			$page = Application_Model_Mappers_PageMapper::getInstance()->find($this->_object->getPageId());
+			if(!$page instanceof Application_Model_Models_Page) {
+				return;
 			}
-			$containerMapper = new Application_Model_Mappers_ContainerMapper();
-			$containerMapper->save($this->_object);
+			foreach($deeplinks as $deeplink) {
+				Tools_Content_Tools::applyDeeplinkPerPage($deeplink, $page);
+			}
+			//Application_Model_Mappers_ContainerMapper::getInstance()->save($this->_object);
 		}
 	}
 
 	private function _massDeeplinkApply() {
-		$containerMapper = new Application_Model_Mappers_ContainerMapper();
-		$containers      = $containerMapper->fetchAll();
-		if(!empty ($containers)) {
-			foreach($containers as $container) {
-				$container->setContent(Tools_Content_Tools::applyDeeplink($this->_object, $container->getContent()));
-				$container->registerObserver(new Tools_Seo_Watchdog());
-				$containerMapper->save($container);
-				$container->notifyObservers();
+		$pages = Application_Model_Mappers_PageMapper::getInstance()->fetchAllByContent($this->_object->getName());
+		if(!empty ($pages)) {
+			foreach ($pages as $page) {
+				Tools_Content_Tools::applyDeeplinkPerPage($this->_object, $page);
 			}
 		}
 	}
-
 }
 

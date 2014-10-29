@@ -1,0 +1,20 @@
+<?php if (count($this->pager)): ?>
+<ul class="search-results">
+<?php foreach ($this->pager as $hit): ?>
+    <li class="search-result-row">
+        <?php if ($this->useImage): ?>
+        <?php $src = $this->escape(Tools_Page_Tools::getPreview($hit['pageId'])); ?>
+        <a class="page-teaser-image" href="<?php echo $this->websiteUrl.$hit['url']; ?>" title="<?php echo $hit['h1']; ?>">
+            <img src="<?php echo $src; ?>" alt="<?php echo $hit['h1']; ?>" />
+        </a>
+        <?php endif; ?>
+        <a href="<?php echo $this->websiteUrl.$hit['url']; ?>" title="<?php echo $hit['h1']; ?>" class="page-title">
+        <?php echo $hit['navName']; ?>
+        </a>
+        <span><?php echo $hit['teaserText']; ?></span>
+    </li>
+<?php endforeach; ?>
+</ul>
+<?php endif; ?>
+
+<?php echo $this->paginationControl($this->pager, 'Elastic', 'pager.phtml', array('urlData' => $this->urlData)); ?>

@@ -10,6 +10,11 @@ class Widgets_Meta_Meta extends Widgets_Abstract {
 
 	const TYPE_DESCRIPTION = 'description';
 
+	protected function _init() {
+		parent::_init();
+		array_push($this->_cacheTags, 'pageid_'.$this->_toasterOptions['id']);
+	}
+
 	protected function  _load() {
 		return $this->_getMetaContent();
 	}
@@ -27,10 +32,5 @@ class Widgets_Meta_Meta extends Widgets_Abstract {
 		}
 		return $metaContent;
 	}
-
-	public static function getAllowedOptions() {
-		return array('meta:description', 'meta:keywords');
-	}
-
 }
 

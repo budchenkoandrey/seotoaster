@@ -15,6 +15,7 @@ abstract class Application_Model_Models_Abstract extends Tools_System_Observable
 		if(is_array($options)) {
 			$this->setOptions($options);
 		}
+        $this->_readObserversQueue();
 	}
 
 	public function __set($name, $value) {
@@ -26,7 +27,7 @@ abstract class Application_Model_Models_Abstract extends Tools_System_Observable
 	}
 
     public function __get($name) {
-		$method = 'set' . ucfirst($name);
+		$method = 'get' . ucfirst($name);
         if (('mapper' == $name) || !method_exists($this, $method)) {
             throw new Exception('Invalid property');
         }
@@ -36,13 +37,14 @@ abstract class Application_Model_Models_Abstract extends Tools_System_Observable
 
 	public function setOptions(array $options) {
 		$methods = get_class_methods($this);
-        foreach ($options as $key => $value) {
+
+		foreach ($options as $key => $value) {
             $method = 'set' . ucfirst($this->_normalizeOptionsKey($key));
             if (in_array($method, $methods)) {
                 $this->$method($value);
             }
         }
-        return $this;
+		return $this;
 	}
 
 	public function getId() {
@@ -50,7 +52,7 @@ abstract class Application_Model_Models_Abstract extends Tools_System_Observable
 	}
 
 	public function setId($id) {
-		$this->_id = (int) $id;
+		$this->_id = ($id) ? intval($id) : null;
 		return $this;
 	}
 
@@ -72,6 +74,32 @@ abstract class Application_Model_Models_Abstract extends Tools_System_Observable
         }
         return $vars;
 	}
+
+    /**
+     * Checking the observer queue. If any, register those observers
+	 *
+     */
+    protected function _readObserversQueue() {
+        if (Zend_Registry::isRegistered('observers_queue')) {
+            $observerQueue = Zend_Registry::get('observers_queue');
+        } else {
+            $observerQueue = array();
+        }
+
+		$modelClassName = get_called_class();
+        if (array_key_exists($modelClassName, $observerQueue) && !empty($observerQueue[$modelClassName])){
+            foreach ($observerQueue[$modelClassName] as $observer) {
+                if(Zend_Loader_Autoloader::getInstance()->suppressNotFoundWarnings(true)->autoload($observer)) {
+                    $this->registerObserver(new $observer());
+                } else {
+                    if(Tools_System_Tools::debugMode()) {
+                        error_log('Unable to load an observer from the queue: ' . $observer);
+                    }
+                }
+            }
+        }
+
+    }
 
 }
 

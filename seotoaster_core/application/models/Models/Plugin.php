@@ -10,15 +10,19 @@ class Application_Model_Models_Plugin extends Application_Model_Models_Abstract 
 
 	const UNINSTALL_FILE_NAME = 'uninstall.sql';
 
+    const DEPENDENCY_FILE_NAME = 'dependency.txt';
+
 	protected $_name    = '';
 
 	protected $_status  = '';
 
-	protected $_cache   = false;
-
-	protected $_tag     = '';
+	protected $_tags    = array();
 
 	protected $_preview = '';
+
+	protected $_license = '';
+
+	protected $_version;
 
 	public function getResourceId() {
 		return Tools_Security_Acl::RESOURCE_PLUGINS;
@@ -42,21 +46,12 @@ class Application_Model_Models_Plugin extends Application_Model_Models_Abstract 
 		return $this;
 	}
 
-	public function getCache() {
-		return $this->_cache;
+	public function getTags($asString = false) {
+		return ($asString) ? implode(',', $this->_tags) : $this->_tags;
 	}
 
-	public function setCache($cache) {
-		$this->_cache = $cache;
-		return $this;
-	}
-
-	public function getTag() {
-		return $this->_tag;
-	}
-
-	public function setTag($tag) {
-		$this->_tag = $tag;
+	public function setTags($tags) {
+		$this->_tags = (is_string($tags) ? explode(',', $tags) : $tags);
 		return $this;
 	}
 
@@ -69,6 +64,20 @@ class Application_Model_Models_Plugin extends Application_Model_Models_Abstract 
 		return $this;
 	}
 
+	public function getLicense() {
+		return $this->_license;
+	}
 
+	public function setLicense($license) {
+		$this->_license = $license;
+	}
+
+	public function getVersion() {
+		return $this->_version;
+	}
+
+	public function setVersion($version) {
+		$this->_version = $version;
+	}
 }
 

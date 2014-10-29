@@ -21,29 +21,51 @@ class Application_Form_Redirect extends Zend_Form {
 			 ->setAttrib('data-callback', 'reloadRedirectsList');
 
 		$this->addElement(new Zend_Form_Element_Text(array(
-			'id'       => 'from-url',
-			'name'     => 'fromUrl',
-			'label'    => 'Former url',
-			'value'    => $this->_fromUrl,
-			'required' => true,
-			'filters'  => array('StringTrim')
+			'id'         => 'from-url',
+			'name'       => 'fromUrl',
+			'label'      => 'Former url',
+			'value'      => $this->_fromUrl,
+			'required'   => true,
+			'validators' => array(
+				new Validators_UrlRegex()
+			),
+			'filters'    => array(
+				new Zend_Filter_StringTrim(),
+				new Filters_UrlScheme()
+			)
+		)));
+
+		$this->addElement(new Zend_Form_Element_Checkbox(array(
+			'name'    => 'urlType',
+			'required'  => true,
+			'value'   => 'local',
+			'checked' => 'checked'
 		)));
 
 		$this->addElement(new Zend_Form_Element_Select(array(
-			'name'     => 'toUrl',
-			'id'       => 'to-url',
-			'value'    => $this->_toUrl,
-			'label'    => 'Local url',
-			'class'    => '_tdropdown',
+			'name'       => 'toUrl',
+			'id'         => 'to-url',
+			'value'      => $this->_toUrl,
+			//'label'      => 'Url',
+			'class'      => '_tdropdown',
+			'filters'    => array(
+				new Zend_Filter_StringTrim(),
+				new Filters_UrlScheme()
+			),
 			'registerInArrayValidator' => false
 		)));
+        $this->getElement('toUrl')->setDisableTranslator(true);
 
-		$this->addElement(new Zend_Form_Element_Submit(array(
+		$this->addElement(new Zend_Form_Element_Button(array(
 			'name'  => 'addRedirect',
 			'id'    => 'add-redirect',
 			'value' => 'Add redirect',
-			'label' => 'Add redirect'
+			'class' => 'btn ticon-plus grid_2 omega',
+			'label' => 'Add redirect',
+            'type'  => 'submit'
 		)));
+
+		$this->setElementDecorators(array('ViewHelper', 'Label'));
 
 	}
 

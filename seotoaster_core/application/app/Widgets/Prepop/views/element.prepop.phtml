@@ -1,0 +1,103 @@
+<?php
+    switch($this->elementType) {
+        case Widgets_Prepop_Prepop::TYPE_TEXT:
+            echo $this->formText($this->prepopName, html_entity_decode($this->prepopContent), array('class' => $this->prepopName . ' prepop-' . $this->elementType, 'maxlength' => ($this->limit) ? $this->limit : ''));
+        break;
+        case Widgets_Prepop_Prepop::TYPE_SELECT:
+            echo $this->formSelect($this->prepopName, $this->prepopContent, array('class' => $this->prepopName . ' prepop-' . $this->elementType), $this->options);
+        break;
+        case Widgets_Prepop_Prepop::TYPE_RADIO:
+            echo $this->formRadio($this->prepopName, $this->prepopContent, array(
+                    'class'      => $this->prepopName . ' prepop-' . $this->elementType,
+                ),
+            $this->options);
+        break;
+        case Widgets_Prepop_Prepop::TYPE_TEXTAREA:
+            echo $this->formTextarea($this->prepopName, html_entity_decode($this->prepopContent), array('class' => $this->prepopName . ' prepop-' . $this->elementType, 'maxlength' => ($this->limit) ? $this->limit : ''));
+        break;
+        case Widgets_Prepop_Prepop::TYPE_CHECKBOX:
+            echo $this->formMultiCheckbox($this->prepopName, ($this->prepopContent) ? explode('~', $this->prepopContent) : null, array(
+                'class'      => $this->prepopName . ' prepop-' . $this->elementType
+            ),
+            $this->options);
+        break;
+    }
+?>
+
+<?php $this->jQuery()->onLoadCaptureStart(); ?>
+
+    var prepop = {
+        webisteUrl: '<?php echo $this->websiteUrl; ?>',
+        name: null,
+        type: null,
+        content: null,
+        container: {
+            name: null,
+            type: null,
+            id:   null,
+            published: true
+        },
+        options: {},
+        url: function() {
+            var self = this;
+            if(!isNaN(parseInt(self.container.id))) {
+                return self.webisteUrl + 'backend/backend_content/edit/id/' + self.container.id + '/containerType/' + self.container.type;
+            }
+            return self.webisteUrl + 'backend/backend_content/add/containerType/' + self.container.type + '/containerName/' + self.container.name + '/pageId/' + self.pageId;
+        },
+        exec: function() {
+            var self    = this;
+            var isValid = self._validate()
+            if(isValid !== true) {
+                showMessage(isValid.error, true);
+                return false;
+            }
+
+            $.post(self.url(), {
+                containerType : self.container.type,
+                containerId   : self.container.id,
+                content       : self.content,
+                pageId        : self.pageId,
+                containerName : self.container.name,
+                published     : self.container.published
+            }, 'json');
+
+        },
+        _validate: function() {
+            var self     = this;
+            self.content = self.content.replace(/<script>/g, '&lt;script&gt;').replace(/<\/script>/, '&lt;/script&gt;');
+            if(self.options.hasOwnProperty('limit') && (self.content.length > self.options.limit)) {
+                return {'error': 'Hey, not so fast! It is to mcuch text here. Please remove some to fit ' + self.options.limit + ' characters limit'};
+            }
+            return true;
+        }
+    };
+
+<?php $this->jQuery()->onLoadCaptureEnd(); ?>
+<?php $this->jQuery()->onLoadCaptureStart(); ?>
+
+    $(document).on('<?php echo $this->onJsElementAction; ?>', '<?php echo (($this->prepopName) ? ('.' . $this->prepopName) : ''); ?>.prepop-<?php echo $this->elementType; ?>', function (e) {
+        //init prepop specific fields
+        prepop.pageId = '<?php echo $this->commonOptions['pageId']; ?>';
+        prepop.container.type = '<?php echo $this->commonOptions['containerType']; ?>';
+        prepop.container.name = '<?php echo $this->commonOptions['containerName']; ?>';
+        prepop.container.id = '<?php echo $this->prepopConainerId; ?>';
+        prepop.type = '<?php echo $this->elementType; ?>';
+        prepop.name = '<?php echo $this->prepopName; ?>';
+        //setting the content
+        prepop.content = $(e.currentTarget).val();
+        if (prepop.type == '<?php echo Widgets_Prepop_Prepop::TYPE_CHECKBOX; ?>') {
+            prepop.content = '';
+            $('input[type=checkbox].' + prepop.name + ':checked').each(function () {
+                prepop.content += '~' + $(this).val();
+            });
+        }
+        //setting up an additional options
+        <?php if(isset($this->limit) && $this->limit): ?>
+        prepop.options.limit = '<?php echo $this->limit; ?>';
+        <?php endif; ?>
+        //executing the prepop
+        prepop.exec();
+    });
+
+<?php $this->jQuery()->onLoadCaptureEnd(); ?>

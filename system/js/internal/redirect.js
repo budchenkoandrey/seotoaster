@@ -1,63 +1,67 @@
 $(function() {
-
-	$('#massdel-run').button();
-
+	$('#urlType-label, #to-url-label').hide();
+	//$('#massdel-run').button();
 	reloadRedirectsList();
+	var toUrlDropDown = $('#to-url');
+	$('#urlType').click(function() {
+		if($(this).prop('checked')){
+			$('#to-url').replaceWith(toUrlDropDown);
+		}else{
+			$('#to-url').replaceWith('<input type="text" id="to-url" name="toUrl" value="http://" />');
+		}
+	});
 
-	var toUrlDropDown = $('#to-url').chosen();
-	$('#domain-toggle').toggle(function(){
-		$(this).text('Local url?');
-		$('#to-url-label').find('label').text('Extarnal url');
-		$('#to-url').replaceWith('<input type="text" id="to-url" name="toUrl" value="" placeholder="Type external url here..."/>');
-	},
-	function() {
-		$(this).text('Extarnal url?');
-		$('#to-url-label').find('label').text('Local url');
-		$('#to-url').replaceWith(toUrlDropDown);
-	})
-
-	$('.redirect-massdel').live('click', function() {
-		var parentRow = $(this).parent().parent();
-		if($(this).attr('checked')) {
-			parentRow.css({
-				opacity: '0.6'
-			})
+	$('.redirect-massdel').on('click', function() {
+		if(!$('.redirect-massdel').not(':checked').length) {
+			$('#massdell-main').attr('checked', true);
 		}
 		else {
-			parentRow.css({
-				opacity: '1'
-			})
+			$('#massdell-main').attr('checked', false);
 		}
-	})
+	});
 
 	$('#massdell-main').click(function() {
-		if($(this).attr('checked')) {
-			$('.redirect-massdel').attr('checked', true);
-		}
-		else {
-			$('.redirect-massdel').attr('checked', false);
-		}
-	})
+		$('.redirect-massdel').prop('checked', ($(this).prop('checked')) ? true : false);
+	});
 
 	$('#massdel-run').click(function() {
 		var ids = [];
 		$('.redirect-massdel:checked').each(function() {
 			ids.push($(this).attr('id'));
 		});
-		var url      = $('#website_url').val() + 'backend/backend_seo/removeredirect/'
-		var callback = $('#frm-redirects').data('callback');
-		$.post(url, {id: ids}, function() {
-			if(callback) {
-				eval(callback + '()');
-			}
-			$('#ajax_msg').text('Done').fadeOut();
-		})
+		if(!ids.length) {
+			showMessage('Select at least one item, please', true);
+			return false;
+		}
+		showConfirm('You are about to remove one or many redirects. Are you sure?', function() {
+			var callback = $('#frm-redirects').data('callback');
+			$.ajax({
+				url: $('#website_url').val() + 'backend/backend_seo/removeredirect/',
+				type: 'post',
+				data: {
+					id: ids
+				},
+				dataType: 'json',
+				beforeSend: function() {showSpinner();},
+				success: function(response) {
+					hideSpinner();
+					showMessage(response.responseText, response.error);
+					if(typeof callback != 'undefined') {
+						eval(callback + '()');
+					}
+				}
+			});
+		});
 	})
-})
+});
 
 //callback function for the ajax forms
 function reloadRedirectsList() {
+	$('input:text').val('http://');
+	showSpinner();
 	$.getJSON($('#website_url').val() + 'backend/backend_seo/loadredirectslist/', function(response) {
+		hideSpinner();
 		$('#redirects-list').html(response.redirectsList);
-	})
+		checkboxRadioStyle();
+	});
 }

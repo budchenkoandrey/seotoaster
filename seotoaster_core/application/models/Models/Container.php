@@ -17,6 +17,10 @@ class Application_Model_Models_Container extends Application_Model_Models_Abstra
 
 	const TYPE_CODE           = 5;
 
+    const TYPE_PREPOP         = 6;
+
+    const TYPE_PREPOPSTATIC   = 7;
+
 	protected $_containerType = self::TYPE_REGULARCONTENT;
 
 	protected $_pageId        = 0;
@@ -25,7 +29,7 @@ class Application_Model_Models_Container extends Application_Model_Models_Abstra
 
 	protected $_published     = true;
 
-	protected $_pubDate       = '';
+	protected $_publishingDate       = '';
 
 	protected $_content       = '';
 
@@ -70,11 +74,11 @@ class Application_Model_Models_Container extends Application_Model_Models_Abstra
 	}
 
 	public function getPublishingDate() {
-		return $this->_pubDate;
+		return $this->_publishingDate;
 	}
 
 	public function setPublishingDate($pubDate) {
-		$this->_pubDate = ($pubDate && $pubDate !== '0000-00-00') ? date('Y-m-d', strtotime($pubDate)) : '';
+		$this->_publishingDate = ($pubDate && $pubDate !== '0000-00-00') ? date('Y-m-d', strtotime($pubDate)) : '';
 		return $this;
 	}
 
